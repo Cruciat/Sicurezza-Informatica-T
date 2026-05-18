@@ -747,4 +747,192 @@
 		\item \textbf{Filtro \texttt{-fs}:} Fondamentale per nascondere le risposte di errore standard (es. se la pagina di errore o di blocco del server ha una dimensione fissa di 1250 byte, inserisci \texttt{-fs 1250}). L'unico payload che emergerà sarà quello che mostra a schermo il file, determinando una variazione della dimensione della risposta HTTP.
 	\end{itemize}
 	
+	\section{Cross-Site Scripting (XSS)}	
+	L'XSS funziona manipolando un sito web vulnerabile affinché restituisca JavaScript malevolo agli utenti. Quando il codice malevolo viene eseguito nel browser della vittima, l'attaccante può compromettere completamente la sua interazione con l'applicazione.
+	
+	\subsection{XSS Proof of Concept}
+	
+	È possibile confermare la maggior parte delle vulnerabilità XSS iniettando un payload che induce il browser a eseguire JavaScript arbitrario. È pratica comune usare la funzione \texttt{alert('XSS')} a questo scopo, perché è breve, innocua e difficile da ignorare quando viene eseguita con successo.
+	
+	\begin{nota}
+		Da Chrome 92 in poi (20 luglio 2021), gli iframe cross-origin non possono chiamare \texttt{alert()}. In questo scenario si raccomanda di usare la funzione \texttt{print()} come alternativa.
+	\end{nota}
+	
+	\subsection{Reflected XSS}
+	
+	\subsubsection{Cos'è il Reflected XSS?}
+	
+	Il Reflected XSS è la forma più semplice di cross-site scripting. Si verifica quando un'applicazione riceve dati in una richiesta HTTP e li include nella risposta immediata in modo non sicuro.
+	
+	\textbf{Esempio:} supponiamo che un sito abbia una funzione di ricerca che riceve il termine di ricerca in un parametro URL:
+	
+	\begin{lstlisting}
+		https://insecure-website.com/search?term=gift
+	\end{lstlisting}
+	
+	L'applicazione riflette il termine nella risposta:
+	
+	\begin{lstlisting}[language=HTML]
+		<p>You searched for: gift</p>
+	\end{lstlisting}
+	
+	Un attaccante può costruire un attacco come questo:
+	
+	\begin{lstlisting}
+		https://insecure-website.com/search?term=<script>/* Bad stuff here... */</script>
+	\end{lstlisting}
+	
+	Che produce la risposta:
+	
+	\begin{lstlisting}[language=HTML]
+		<p>You searched for: <script>/* Bad stuff here... */</script></p>
+	\end{lstlisting}
+	
+	Se un altro utente visita l'URL costruito dall'attaccante, lo script viene eseguito nel browser della vittima nel contesto della sua sessione.
+	
+	\subsubsection{Impatto del Reflected XSS}
+	
+	L'attaccante può indurre la vittima a fare una richiesta tramite link su siti controllati dall'attaccante, su altri siti che consentono la generazione di contenuti, oppure tramite email, tweet o altri messaggi. L'impatto del Reflected XSS è generalmente meno grave dello Stored XSS, poiché richiede un meccanismo di consegna esterno.
+	
+	\subsubsection{Come trovare e testare le vulnerabilità di Reflected XSS}
+	
+	Il test manuale prevede i seguenti passi:
+	
+	\begin{enumerate}
+		\item \textbf{Testare ogni entry point.} Testare separatamente ogni entry point per i dati nelle richieste HTTP dell'applicazione, inclusi parametri nell'URL, nel corpo del messaggio, nel percorso del file URL e negli header HTTP.
+		\item \textbf{Inviare valori alfanumerici casuali.} Per ogni entry point, inviare un valore casuale univoco e verificare se viene riflesso nella risposta. Un valore alfanumerico casuale di circa 8 caratteri è normalmente ideale.
+		\item \textbf{Determinare il contesto della riflessione.} Per ogni punto in cui il valore appare nella risposta, determinarne il contesto: tra tag HTML, all'interno di un attributo, in una stringa JavaScript, ecc.
+		\item \textbf{Testare un payload candidato.} In base al contesto, testare un payload XSS iniziale che scateni l'esecuzione di JavaScript se riflesso senza modifiche.
+		\item \textbf{Testare payload alternativi.} Se il payload viene modificato o bloccato dall'applicazione, testare payload e tecniche alternative.
+		\item \textbf{Testare l'attacco nel browser.} Trasferire l'attacco in un browser reale per verificare che il JavaScript iniettato venga effettivamente eseguito.
+	\end{enumerate}
+	
+	\subsection{Stored XSS}
+	
+	\subsubsection{Cos'è lo Stored XSS?}
+	
+	Lo Stored XSS si verifica quando un'applicazione riceve dati da una fonte non attendibile e li include nelle successive risposte HTTP in modo non sicuro.\\\\
+	I dati possono essere inviati all'applicazione tramite richieste HTTP — ad esempio, commenti su post di blog, nickname in chat room, o dettagli di contatto in un ordine. In altri casi, i dati possono provenire da fonti non attendibili esterne, come messaggi ricevuti via SMTP in una webmail, post sui social media o dati di traffico di rete.\\\\
+	\textbf{Esempio:} un'applicazione consente agli utenti di inviare commenti su post di blog:
+	
+	\begin{lstlisting}
+		POST /post/comment HTTP/1.1
+		Host: vulnerable-website.com
+		Content-Length: 100
+		
+		postId=3&comment=This+post+was+extremely+helpful.&name=Carlos+Montoya&email=carlos%40normal-user.net
+	\end{lstlisting}
+	Dopo l'invio, qualsiasi utente che visita il post riceve nella risposta:
+	
+	\begin{lstlisting}[language=HTML]
+		<p>This post was extremely helpful.</p>
+	\end{lstlisting}
+	Un attaccante può inviare un commento malevolo come \texttt{<script>/* Bad stuff here... */</script>}: qualsiasi utente che visita il post riceverà quindi lo script malevolo nel browser.
+	
+	\subsubsection{Impatto dello Stored XSS}
+	
+	La differenza chiave tra Reflected e Stored XSS è che lo Stored XSS consente attacchi self-contained all'interno dell'applicazione stessa: l'attaccante inserisce l'exploit nell'applicazione e attende che gli utenti lo incontrino, senza dover trovare un meccanismo di consegna esterno.\\\\
+	Lo Stored XSS è particolarmente rilevante in situazioni dove la vulnerabilità colpisce solo utenti attualmente loggati: con lo Stored XSS, l'utente è garantito essere loggato quando incontra l'exploit, a differenza del Reflected XSS che richiede una temporizzazione fortunosa.
+	
+	\subsubsection{Come trovare e testare le vulnerabilità di Stored XSS}
+	
+	Il test manuale per lo Stored XSS richiede di testare tutti i rilevanti \textbf{entry point} attraverso cui i dati controllati dall'attaccante possono entrare nell'applicazione, e tutti gli \textbf{exit point} in cui quei dati potrebbero apparire nelle risposte.\\\\
+	\textbf{Entry point} includono:
+	\begin{itemize}
+		\item Parametri o altri dati nella query string e nel corpo dei messaggi URL.
+		\item Il percorso del file URL.
+		\item Header delle richieste HTTP.
+		\item Qualsiasi route fuori-banda tramite cui un attaccante può consegnare dati all'applicazione (es. email in una webmail, tweet in un'app di marketing).
+	\end{itemize}
+	\textbf{Exit point} sono tutte le possibili risposte HTTP restituite a qualsiasi utente in qualsiasi situazione.
+	Il primo passo è localizzare i collegamenti tra entry e exit point, operazione che può essere difficile perché:
+	\begin{itemize}
+		\item I dati inviati a un entry point potrebbero essere emessi da qualsiasi exit point.
+		\item I dati memorizzati possono essere sovrascritti da altre azioni nell'applicazione.
+	\end{itemize}
+	Un approccio realistico consiste nel lavorare sistematicamente attraverso gli entry point, inviando un valore specifico in ciascuno e monitorando le risposte per rilevare i casi in cui il valore appare. Quando si identificano i collegamenti, ogni collegamento deve essere testato per rilevare se è presente una vulnerabilità Stored XSS.
+	
+	\subsection{DOM-based XSS}
+	
+	\subsubsection{Cos'è il DOM-based XSS?}
+	
+	Le vulnerabilità DOM-based XSS si verificano quando JavaScript prende dati da una fonte controllabile dall'attaccante e li elabora in modo non sicuro direttamente nel browser, senza che il payload venga mai inviato al server.\\\\
+	Lo scenario classico sfrutta il \textbf{frammento dell'URL} (la parte dopo \texttt{\#}): i browser non inviano al server la porzione dell'URL che segue il simbolo \texttt{\#}, quindi il payload non è visibile nei log del server e non può essere filtrato lato server. Se il codice JavaScript della pagina legge \texttt{document.location.href} (o \texttt{location.hash}) e scrive quel valore nel DOM senza sanitizzarlo, il payload viene eseguito direttamente nel browser della vittima.
+	\textbf{Esempio concettuale:}
+	
+	\begin{lstlisting}
+		https://vulnerable-website.com/page#<img src=1 onerror=alert(1)>
+	\end{lstlisting}
+	Il codice JavaScript della pagina legge il valore dall'hash e lo scrive nel DOM (ad es. tramite \texttt{innerHTML}), eseguendo il payload lato client senza alcun passaggio dal server.
+	
+	\subsection{Contesti XSS}
+	
+	Quando si testa per Reflected e Stored XSS, un compito fondamentale è identificare il \textbf{contesto XSS}: la posizione nella risposta in cui appaiono i dati controllabili dall'attaccante e qualsiasi validazione eseguita su quei dati. In base al contesto si seleziona il payload appropriato.
+	
+	\subsubsection{XSS tra tag HTML}
+	
+	Quando il contesto XSS è testo tra tag HTML, è necessario introdurre nuovi tag HTML che inneschino l'esecuzione di JavaScript. Esempi utili:
+	
+	\begin{lstlisting}[language=HTML]
+		<script>alert(document.domain)</script>
+		<img src=1 onerror=alert(1)>
+	\end{lstlisting}
+	
+	\subsubsection{XSS negli attributi di tag HTML}
+	
+	Quando il contesto XSS è nel valore di un attributo HTML, a volte è possibile terminare il valore dell'attributo, chiudere il tag e introdurne uno nuovo:
+	
+	\begin{lstlisting}[language=HTML]
+		"><script>alert(document.domain)</script>
+	\end{lstlisting}
+	
+	Più comunemente le parentesi angolari sono bloccate, quindi si può terminare il valore dell'attributo e introdurne uno nuovo che crei un contesto scriptabile, come un event handler:
+	
+	\begin{lstlisting}
+		" autofocus onfocus=alert(document.domain) x="
+	\end{lstlisting}
+	
+	Se il contesto è nell'attributo \texttt{href} di un tag anchor, si può usare lo pseudo-protocollo \texttt{javascript}:
+	
+	\begin{lstlisting}[language=HTML]
+		<a href="javascript:alert(document.domain)">
+	\end{lstlisting}
+	
+	\subsubsection{XSS nel JavaScript}
+	
+	\textbf{Terminare lo script esistente}\\
+	Nel caso più semplice, è possibile chiudere il tag script esistente e introdurre nuovi tag HTML:
+	
+	\begin{lstlisting}[language=HTML]
+		</script><img src=1 onerror=alert(document.domain)>
+	\end{lstlisting}
+	
+	Questo funziona perché il browser esegue prima il parsing HTML per identificare i blocchi di script, e solo successivamente il parsing JavaScript.\\\\	
+	\textbf{Rompere fuori da una stringa JavaScript}\\
+	Quando il contesto XSS è all'interno di un letterale stringa tra virgolette, è spesso possibile uscire dalla stringa ed eseguire JavaScript direttamente:
+	
+	\begin{lstlisting}
+		'-alert(document.domain)-'
+		';alert(document.domain)//
+	\end{lstlisting}
+	Alcune applicazioni aggiungono un backslash prima dei caratteri speciali per prevenire questo. Un attaccante può neutralizzarlo usando il proprio backslash: l'applicazione converte \texttt{'} in \texttt{\textbackslash'}, ma il payload \texttt{\textbackslash'} diventa \texttt{\textbackslash\textbackslash'} — il primo backslash neutralizza il secondo, e la virgoletta torna a essere un terminatore di stringa.\\\\
+	Quando certi caratteri sono bloccati, si può usare lo statement \texttt{throw} con un exception handler per chiamare funzioni senza parentesi:
+	
+	\begin{lstlisting}
+		onerror=alert;throw 1
+	\end{lstlisting}
+	\textbf{Sfruttare la codifica HTML}\\
+	Quando il contesto XSS è in JavaScript all'interno di un attributo tag con virgolette (come un event handler), è possibile usare entità HTML per aggirare i filtri. Se l'applicazione blocca i singoli apici, si può usare:
+	
+	\begin{lstlisting}
+		&apos;-alert(document.domain)-&apos;
+	\end{lstlisting}
+	Il browser decodifica HTML il valore dell'attributo prima dell'interpretazione JavaScript, quindi le entità vengono decodificate come virgolette e l'attacco ha successo.\\\\
+	\textbf{XSS nei template literal JavaScript}\\
+	I template literal JavaScript usano la sintassi \texttt{\$\{...\}} per espressioni incorporate. Quando il contesto XSS è in un template literal, non è necessario terminarlo:
+	
+	\begin{lstlisting}
+		${alert(document.domain)}
+	\end{lstlisting}
+	
 \end{document}
