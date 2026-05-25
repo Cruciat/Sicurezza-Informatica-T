@@ -3257,5 +3257,531 @@ Firmare una chiave è un atto di fiducia crittografica, non un'operazione purame
 		\textbf{Firmare una chiave} & \texttt{gpg --sign-key identita@mail} & Attestare fiducia sulla chiave pubblica \\ \hline
 	\end{tabular}
 \end{table}
+
+\chapter{Chiavi Crittografiche}
+
+\section{Ciclo di Vita e Generazione}
+Il ciclo di vita di una chiave crittografica si articola in tre fasi fondamentali: generazione, memorizzazione e distribuzione.
+
+\subsection{Tipologie di Generatori di Numeri Casuali}
+La casualità è essenziale per la sicurezza e la randomizzazione dei protocolli crittografici. I numeri generati devono garantire casualità (frequenza bilanciata di zeri e uni), imprevedibilità (impossibilità di dedurre parti della sequenza) e assoluta indipendenza.
+\begin{itemize}
+	\item \textbf{TRNG (True Random Number Generation):} Sfruttano sorgenti fisiche di entropia (es. il rumore termico o i tempi di arrivo degli interrupt hardware) per garantire un'indipendenza perfetta e un'imprevedibilità assoluta. Il segnale grezzo fisico viene sottoposto a conversione analogico-digitale e poi a "condizionamento" per rimuovere eventuali bias. Nonostante la robustezza, questi sistemi risultano complessi e inefficienti.
+	\item \textbf{PRNG (Pseudo Random Number Generation):} Utilizzano algoritmi deterministici. Per garantire sicurezza, richiedono in input un seme iniziale (seed) di alta qualità, tipicamente fornito proprio da un TRNG. Un PRNG robusto deve impedire categoricamente a un attaccante di risalire al seme iniziale o di prevedere i valori futuri, anche conoscendo un'ampia porzione della sequenza già generata.
+\end{itemize}
+
+\subsection{Test di Casualità (NIST SP 800-22)}
+Per validare la robustezza statistica di un PRNG, si applicano suite di test specifici, come lo standard NIST SP 800-22, che ne prevede in totale 15. I tre test principali presi in esame sono:
+\begin{itemize}
+	\item \textbf{Frequency test:} È il test più basilare; verifica che il numero complessivo di zeri e uni sia bilanciato e prossimo alle probabilità attese per una sequenza puramente casuale.
+	\item \textbf{Runs test:} Valuta il numero e la lunghezza dei "run" (sequenze ininterrotte di bit identici), assicurandosi che la loro distribuzione rispetti rigorosamente le aspettative statistiche per prevenire pattern.
+	\item \textbf{Maurer's universal statistical test:} Misura la comprimibilità della sequenza di bit. Una sequenza che risulta comprimibile in modo significativo evidenzia pattern interni, pertanto viene considerata non casuale.
+\end{itemize}
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Resistenza degli Algoritmi}
+
+\subsection{Forza Bruta e Limiti Fisici}
+La sicurezza di un algoritmo e della rispettiva chiave decresce nel tempo a causa dell'evoluzione tecnologica. La tabella seguente illustra le stime dei tempi necessari per testare interamente lo spazio delle chiavi in base alle risorse economiche impiegate:
+
+\begin{table}[H]
+	\centering
+	\begin{tabular}{|l|l|l|l|}
+		\hline
+		\textbf{Risorse (Budget)} & \textbf{DES (56 bit)} & \textbf{AES (128 bit)} & \textbf{AES (256 bit)} \\ \hline
+		1 K€ (Individuo) & 16 anni & $10^{22}$ anni & $10^{61}$ anni \\ \hline
+		1 M€ (Impresa) & 6 giorni & $10^{19}$ anni & $10^{58}$ anni \\ \hline
+		1 G€ (NSA) & 8 minuti & $10^{16}$ anni & $10^{55}$ anni \\ \hline
+	\end{tabular}
+\end{table}
+
+Oltre all'improbabilità computazionale, la forza bruta si scontra con il limite termodinamico invalicabile della fisica, noto come \textbf{Limite di Landauer}: l'energia minima richiesta per alterare lo stato di un singolo bit è $k \times T \times \ln(2)$. Ad esempio, concentrare e utilizzare l'intera energia emessa dal Sole in un anno consentirebbe appena $4 \times 10^{56}$ variazioni di bit (equivalente a un conteggio esaustivo solo fino a $2^{188}$).
+
+\subsection{Fattorizzazione (Asimmetrica / RSA)}
+Nei sistemi asimmetrici, il miglior attacco contro RSA non è la forza bruta sullo spazio delle chiavi, ma la ricerca matematica dei fattori primi del modulo. Un traguardo significativo (nel 2020) ha visto la fattorizzazione di una chiave RSA-250 (829 bit) utilizzando 2700 anni-core di computazione. Ad oggi, si stima che una chiave RSA da 3000 bit sia da considerarsi sicura fino al 2026.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Memorizzazione e Gestione}
+Le chiavi crittografiche richiedono politiche di gestione diametralmente opposte a seconda dello scopo operativo:
+\begin{itemize}
+	\item \textbf{Chiavi di decifrazione (Riservatezza):} La loro perdita comporterebbe la distruzione irreversibile dei dati cifrati, pertanto necessitano imperativamente di meccanismi di backup (es. tramite \textit{Key escrow} o \textit{Secret sharing}) pur mantenendone la segretezza.
+	\item \textbf{Chiavi di firma (Autenticità):} Una chiave compromessa invalida l'identità digitale dell'utente e può essere revocata. Per questo motivo \textbf{non deve mai essere sottoposta a backup}. Il suo utilizzo deve essere sempre vincolato alla volontà del titolare, proteggendola tramite \textit{passphrase} robuste o archiviandola in moduli hardware dedicati (\textit{Hardware Security Module - HSM}).
+\end{itemize}
+
+A livello aziendale, la gestione crittografica impone sfide di scalabilità: in una rete con crittografia puramente simmetrica composta da $N$ utenti, sarebbero necessarie $N(N-1)/2$ chiavi per permettere la comunicazione tra tutte le coppie possibili. Per standardizzare l'interoperabilità tra sistemi e gestire il ciclo di vita si adottano policy standardizzate, come OASIS KMIP.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Distribuzione e Autenticità}
+Nello scenario asimmetrico, le chiavi simmetriche non devono mai transitare in chiaro sulla rete. Il loro scambio avviene o manualmente (ormai impraticabile su larga scala) oppure tramite un'entità terza chiamata KDC (\textit{Key Distribution Center}), con cui ogni utente negozia una chiave per stabilire connessioni sicure con altri nodi.
+
+Un'alternativa fondamentale per la distribuzione remota è lo scambio \textbf{Diffie-Hellman (DH)}, in cui due entità (Alice e Bob) stabiliscono una chiave segreta condivisa ($K$) scambiandosi esclusivamente parametri pubblici su un canale insicuro:
+\begin{itemize}
+	\item Alice calcola $A=g^{a} \bmod p$ e invia $g, p, A$.
+	\item Bob calcola $B=g^{b} \bmod p$ e lo invia ad Alice.
+	\item Entrambi ricavano autonomamente la chiave $K = g^{ab} \bmod p$.
+\end{itemize}
+
+\begin{itemize}
+	\item \textbf{Il problema del Man-in-the-Middle:} Pur essendo inattaccabili da un avversario passivo (che si limita ad ascoltare i parametri), protocolli come DH o il semplice invio di chiavi pubbliche RSA sono vulnerabili ad attaccanti attivi se manca l'autenticazione iniziale. Un intruso può intercettare lo scambio, sostituire i valori con i propri e instaurare due sessioni cifrate distinte, facendo da passacarte silente. Si deduce che la vulnerabilità critica dei sistemi a chiave pubblica non è la riservatezza delle chiavi, ma la garanzia della loro \textbf{autenticità}.
+\end{itemize}
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Certificazione e PKI (Public Key Infrastructure)}
+Per impedire attacchi di sostituzione e vincolare in modo inequivocabile un'identità a una chiave pubblica, esistono due approcci principali:
+\begin{enumerate}
+	\item \textbf{Web of Trust:} Decentralizzato, dove l'autenticità di una chiave è testimoniata dalle firme di altri utenti ("garanti") del network. Presenta enormi limiti di scalabilità per organizzazioni complesse.
+	\item \textbf{Modello Infrastrutturale (PKI):} Un'autorità centrale terza fidata (Certification Authority - CA) garantisce e documenta formalmente l'associazione tra utente e chiave pubblica.
+\end{enumerate}
+
+% ISTRUZIONI PER COMPILARE SENZA ERRORI: 
+% Quando avrai l'immagine "Slide 17" togli il simbolo % all'inizio delle 5 righe qui sotto e metti il nome del file corretto.
+\begin{figure}[H]
+      \centering
+      \includegraphics[width=\textwidth]{screenshot011.png}
+      \caption{Diagramma di flusso della Public Key Infrastructure che illustra le interazioni tra Users, Registration Authority, Directory e Certification Authority per l'emissione, distribuzione e revoca dei certificati}
+ \end{figure}
+
+\subsection{Certificati X.509v3}
+La CA attesta l'identità rilasciando un documento standard, il certificato di chiave pubblica X.509 (versione 3). Al suo interno si trovano i seguenti campi essenziali:
+\begin{itemize}
+	\item Versione, Numero seriale e Periodo di Validità (Not before / Not after).
+	\item L'identificativo dell'emittente (Issuer) e quello del soggetto certificato (Subject).
+	\item L'informazione chiave, contenente la chiave pubblica del soggetto e i parametri del suo algoritmo.
+	\item La \textbf{Firma digitale} apposta dalla Certification Authority su tutto il documento.
+\end{itemize}
+
+\subsection{Catena di Certificazione (Certificate Chain)}
+Quando si riceve un messaggio firmato, il processo di verifica dell'autenticità è ricorsivo. Il destinatario valida la firma dell'utente usando la chiave pubblica della CA intermediaria indicata nel certificato. Ma per fidarsi del certificato di quest'ultima CA, ne verificherà a sua volta la firma. Si risale gerarchicamente questa \textit{Certificate Chain} fino a raggiungere il \textbf{Root Certificate}, ovvero un certificato "auto-firmato" (\textit{self-signed}) appartenente a una Root CA fondamentale, la cui identità è implicitamente considerata attendibile dal sistema.
+
+% ISTRUZIONI PER COMPILARE SENZA ERRORI: 
+% Quando avrai l'immagine "Slide 19" togli il simbolo % all'inizio delle 5 righe qui sotto e metti il nome del file corretto.
+\begin{figure}[H]
+      \centering
+      \includegraphics[width=1.1\textwidth]{screenshot012.png}
+      \caption{Diagramma della Certificate Chain, che traccia le validazioni di firma partendo da un End Entity Certificate verso un Intermediate Certificate fino a giungere al Root Certificate auto-firmato}
+ \end{figure}
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Quantum Key Distribution (BB84)}
+La \textit{Quantum Key Distribution} (QKD) è un modello fisico-matematico che non fa affidamento sulla complessità computazionale, ma sfrutta i princìpi meccanici della fisica quantistica, lavorando sulla polarizzazione dei fotoni (Qubits) per garantire distribuzioni di chiavi intrinsecamente sicure.
+Per l'assioma quantistico della misurazione, un qubit non può essere campionato, ispezionato o clonato senza conseguenze. Qualsiasi atto di misurazione altera inevitabilmente e in modo irreversibile lo stato del fotone, forzandolo a collassare deterministicamente su uno dei vettori appartenenti alla base del dispositivo di misurazione.
+
+\subsection{Il Protocollo BB84 (Bennet \& Brassard, 1984)}
+Serve a negoziare una chiave segreta a distanza ed è strutturato nei seguenti passaggi:
+\begin{enumerate}
+	\item \textbf{Invio (Alice):} Genera una sequenza casuale di bit (0 e 1) e sceglie per ogni bit una di due basi di misurazione a caso (la base Standard o la base Hadamard). Codifica i bit come fotoni polarizzati e li trasmette a Bob.
+	\item \textbf{Ricezione (Bob):} Misura ogni fotone in ingresso dovendo, tuttavia, scegliere a sua volta una base del tutto casuale per ogni bit. Statisticamente avrà il 50\% di probabilità di indovinare la stessa base adottata da Alice e registrare il bit corretto.
+	\item \textbf{Riconciliazione (Canale Classico):} Conclusa la ricezione, Alice e Bob comunicano pubblicamente su un canale tradizionale esclusivamente le \textit{basi} (es. "Hadamard, Standard, Standard...") utilizzate per ogni posizione, omettendo tassativamente i bit registrati. Mantenendo e confrontando solo i fotoni misurati con la base coincidente, generano una chiave condivisa segreta perfetta.
+\end{enumerate}
+
+\subsection{Probabilità di Rilevamento dell'Attaccante (Eve)}
+Se un'attaccante passiva (Eve) tenta di intercettare il canale quantistico, si scontrerà col fatto che leggere il fotone equivale a misurarlo (e quindi ad alterarne irrimediabilmente lo stato se non indovina la base usata da Alice):
+\begin{itemize}
+	\item Eve ha solo il 50\% di probabilità di indovinare la base giusta e passare inosservata su quel singolo fotone.
+	\item Per i fotoni letti con la base errata, Eve altera irrimediabilmente la polarizzazione originale del fotone che re-inoltrerà a Bob.
+	\item Di conseguenza, quando Bob misurerà (correttamente, concordando con Alice) un fotone alterato da Eve, avrà a sua volta un 50\% di probabilità di ottenere un bit invertito.
+	\item Si ottiene che, per ogni bit spiato da Eve, Bob registrerà una discrepanza del \textbf{25\%} rispetto al bit di partenza di Alice.
+\end{itemize}
+
+Confrontando alla fine un limitato e piccolo subset di $n$ bit campione estratti dalla chiave per fare un test di controllo, la probabilità che le manipolazioni di Eve passino inosservate ad Alice e Bob precipita rapidamente a $1/2^{2n}$. In caso di elevato tasso di errore anomalo, le parti acquisiscono matematicamente la certezza di essere sotto attacco, scartano le informazioni compromesse e interrompono lo scambio.
+
+\chapter{Protezione delle comunicazioni e sicurezza di rete}
+\label{ch:protezione-comunicazioni}
+
+\section{Introduzione e panoramica}
+La protezione delle comunicazioni mira a garantire riservatezza, integrit\`a, autenticit\`a e disponibilit\`a delle informazioni trasmesse su reti potenzialmente insicure. I meccanismi possono essere implementati a diversi livelli del modello OSI: collegamento dati, rete, trasporto e applicazione. In questo capitolo si sintetizzano i principali protocolli, le vulnerabilit\`a storiche e le contromisure operative pi\`u rilevanti.
+
+\section{SSL e TLS}
+
+\subsection{Concetti fondamentali}
+Transport Layer Security (TLS), evoluzione di SSL, fornisce autenticazione delle entit\`a, riservatezza dei dati, integrit\`a e negoziazione iniziale di algoritmi e chiavi. TLS si colloca logicamente fra trasporto e applicazione, e viene spesso usato da protocolli come HTTPS senza richiedere modifiche al livello applicativo.
+
+\subsection{Sessioni e connessioni}
+Due entit\`a che comunicano tramite TLS instaurano prima una \emph{sessione}; una singola sessione pu\`o dar luogo a molte connessioni sicure contemporanee. TLS supporta il riutilizzo di sessioni gi\`a negoziate per ridurre il carico computazionale di nuove aperture.
+
+\subsection{Handshake}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.7\textwidth]{screenshot013.png}
+	\caption{Diagramma di sequenza del SSL Handshake Protocol tra Client e Server, con lo scambio dei pacchetti Hello, Certificate, Key Exchange e Finished}
+\end{figure}
+
+Lo handshake TLS ha tre obiettivi principali:
+\begin{itemize}
+	\item autenticare il server e, se richiesto, il client tramite certificati X.509;
+	\item negoziare suite crittografiche;
+	\item derivare chiavi di sessione condivise.
+\end{itemize}
+Lo scambio avviene prima della trasmissione dei dati applicativi. Il record protocol provvede poi a frammentare, cifrare e autenticare i dati secondo quanto negoziato.
+
+\subsection{Record protocol}
+Il TLS Record Protocol suddivide il flusso applicativo in record, li protegge con cifratura e integrit\`a, e li ricompone lato destinatario. La compressione \`e oggi sconsigliata, perch\`e ha storicamente aperto la strada a attacchi come CRIME, TIME e BREACH.
+
+\subsection{Vulnerabilit\`a note}
+Le vulnerabilit\`a pi\`u importanti da ricordare sono:
+\begin{itemize}
+	\item RC4: cifrario deprecato per bias statistici;
+	\item BEAST: sfrutta CBC con IV prevedibile;
+	\item Lucky Thirteen: side-channel temporale sulla verifica del MAC;
+	\item POODLE: downgrade verso SSLv3 e padding oracle;
+	\item CRIME, TIME, BREACH: attacchi legati alla compressione;
+	\item Heartbleed: bug di implementazione in OpenSSL che consente leak di memoria;
+	\item DROWN: sfrutta supporto a SSLv2 su server correlati per attaccare connessioni pi\`u moderne.
+\end{itemize}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.7\textwidth]{screenshot014.png}
+	\caption{Diagramma concettuale dell'attacco Heartbleed che mostra la richiesta di Heartbeat malevola con lunghezza falsificata per estrarre informazioni dalla memoria del server}
+\end{figure}
+
+\subsection{Mitigazioni principali}
+Le contromisure pi\`u efficaci sono:
+\begin{itemize}
+	\item disabilitare SSLv2 e SSLv3;
+	\item preferire TLSv1.2 o TLSv1.3;
+	\item usare suite moderne con AEAD, come AES-GCM o ChaCha20-Poly1305;
+	\item aggiornare tempestivamente le librerie crittografiche;
+	\item applicare HSTS dove opportuno;
+	\item adottare Certificate Transparency per il controllo dei certificati emessi.
+\end{itemize}
+
+\subsection{HTTPS e attacchi applicativi}
+Anche con TLS attivo esistono attacchi che sfruttano il contesto applicativo: occultamento della barra degli indirizzi, phishing con domini omografi, certificati falsi o CA inserite nel certificate store dell'utente. Le difese includono HSTS, corretta gestione delle CA e attenzione ai warning del browser.
+
+\section{VPN e IPSec}
+
+\subsection{VPN}
+Una VPN fornisce canali virtualmente privati su reti pubbliche. Gli scenari tipici sono:
+\begin{itemize}
+	\item host-host;
+	\item host-net;
+	\item net-net.
+\end{itemize}
+
+\subsection{IPSec}
+IPSec non \`e un protocollo singolo, ma un framework che include algoritmi di sicurezza, negoziazione e gestione chiavi. I suoi componenti principali sono:
+\begin{itemize}
+	\item Authentication Header (AH), per autenticazione e integrit\`a;
+	\item Encapsulating Security Payload (ESP), per riservatezza e opzionalmente autenticazione;
+	\item IKEv2, per la negoziazione delle chiavi;
+	\item Security Association (SA), per descrivere un'associazione unidirezionale di sicurezza.
+\end{itemize}
+
+\subsection{Transport mode e tunnel mode}
+\begin{description}
+	\item[Transport mode:] protegge il payload del pacchetto IP, lasciando visibile l'header IP originale.
+	\item[Tunnel mode:] incapsula l'intero pacchetto IP in un nuovo pacchetto IP esterno.
+\end{description}
+Il transport mode \`e adatto a comunicazioni end-to-end; il tunnel mode \`e pi\`u tipico di VPN site-to-site.
+
+\subsection{AH ed ESP}
+AH garantisce autenticazione e integrit\`a anche contro i replay, ma non riservatezza. ESP fornisce principalmente cifratura del payload e pu\`o aggiungere autenticazione. In presenza di NAT, AH pu\`o risultare problematico perch\'e autentica anche campi dell'header IP che il NAT modifica.
+
+\subsection{Considerazioni comparative}
+TLS \`e pi\`u specifico del dominio applicativo, ma pi\`u semplice da integrare; IPSec \`e pi\`u generale e trasparente per le applicazioni, ma spesso pi\`u complesso da interoperare correttamente fra implementazioni diverse.
+
+\section{OpenVPN}
+OpenVPN implementa in user space concetti simili a IPSec, ma usa TLS come canale di controllo e interfacce virtuali come \texttt{tun} o \texttt{tap}. La modalit\`a \texttt{tun} opera a livello 3, mentre \texttt{tap} si avvicina al livello 2.
+
+\subsection{Tunnel mode con OpenVPN}
+Nel tunnel mode, OpenVPN incapsula il traffico verso il peer remoto, lo trasporta su una rete insicura e lo decapsula sul lato di arrivo. Il kernel vede l'interfaccia virtuale come una normale interfaccia di rete.
+
+[[QUI IMMAGINE SLIDE: schema del tunnel OpenVPN con client, gateway, interfaccia tun e decapsulazione]]
+
+\subsection{Transport mode con OpenVPN}
+Nel transport mode, il traffico viene inoltrato in modo da far sembrare la macchina remota parte della stessa rete locale. Questa modalit\`a \`e tipica quando si vuole estendere il dominio di livello 2 o simulare una connessione fisica diretta.
+
+\section{Sicurezza a livello data link}
+
+\subsection{VLAN}
+Le VLAN separano logicamente il traffico su una stessa infrastruttura fisica. Con il tagging 802.1Q, i frame vengono marcati in modo da appartenere a una specifica VLAN.
+
+\begin{itemize}
+	\item Access port: appartiene a una sola VLAN, di norma senza tagging.
+	\item Trunk port: trasporta pi\`u VLAN, usando il tagging per distinguerle.
+\end{itemize}
+
+\subsection{VLAN hopping}
+Due tecniche importanti sono:
+\begin{itemize}
+	\item switched spoofing, in cui l'attaccante fa credere alla vittima di essere uno switch;
+	\item double tagging, in cui un frame con doppio tag viene inoltrato in modo da raggiungere una VLAN diversa da quella attesa.
+\end{itemize}
+Le mitigazioni includono disabilitare DTP, configurare con attenzione le VLAN native e limitare il trunking alle sole porte necessarie.
+
+\section{SOCKS5 e Tor}
+
+\subsection{SOCKS5}
+SOCKS5 \`e un circuit-level gateway che inoltra connessioni TCP o UDP a nome del client. \`E utile quando si vuole separare la scelta del percorso di rete dal protocollo applicativo.
+
+\subsection{Tor}
+Tor costruisce percorsi a cipolla attraverso relay successivi. Ogni relay conosce solo i nodi adiacenti, riducendo la visibilit\`a della rete. Tuttavia, l'exit node vede il traffico in chiaro se l'applicazione non cifra a sua volta i dati.
+
+\subsection{Limiti e contromisure}
+Le debolezze principali riguardano correlazione di traffico, leak applicativi e uso di exit node non fidati. Le contromisure pi\`u importanti sono l'uso di HTTPS sopra Tor, l'uso di bridges quando necessario e la riduzione dei leak a livello applicativo.
+
+\section{Secure Shell}
+
+\subsection{Obiettivi di SSH}
+SSH sostituisce protocolli insicuri come TELNET fornendo autenticazione dell'host, canale cifrato e autenticazione dell'utente. Le fasi essenziali sono:
+\begin{enumerate}
+	\item negoziazione delle cipher suite;
+	\item autenticazione dell'host remoto;
+	\item creazione del canale cifrato;
+	\item autenticazione dell'utente.
+\end{enumerate}
+
+\subsection{Autenticazione dell'host}
+Alla prima connessione, la chiave pubblica dell'host deve essere verificata con un canale out-of-band. Le chiavi note vengono memorizzate in \texttt{\~/.ssh/known\_hosts}.
+
+\subsection{Autenticazione dell'utente}
+Con chiave pubblica, il flusso tipico \`e:
+\begin{verbatim}
+	ssh-keygen -t rsa -b 2048
+	ssh-copy-id -i ~/.ssh/id_rsa.pub user@remote
+\end{verbatim}
+La chiave privata deve essere protetta con permessi rigidi e, se possibile, con passphrase.
+
+\subsection{Tunnelling SSH}
+SSH supporta diversi tipi di forwarding:
+\begin{itemize}
+	\item \texttt{-L}: local forwarding, dalla porta locale verso una destinazione remota;
+	\item \texttt{-R}: remote forwarding, apre una porta sul server remoto verso un servizio locale;
+	\item \texttt{-D}: dynamic forwarding, crea un proxy SOCKS locale;
+	\item \texttt{-J}: jump host, consente un accesso tramite uno o pi\`u host intermedi.
+\end{itemize}
+
+\begin{verbatim}
+	ssh -L [bind_address:]port:host:hostport user@gateway
+	ssh -R remote_port:host:hostport user@gateway
+	ssh -D [bind_address:]port user@gateway
+	ssh -J user@jumphost target
+\end{verbatim}
+
+\subsection{Buone pratiche}
+Disabilitare l'autenticazione con password quando possibile, limitare il forwarding, restringere gli utenti autorizzati e proteggere le chiavi private sono misure fondamentali per un uso sicuro di SSH.
+
+\section{Contromisure operative}
+
+\subsection{Hardening}
+Le misure operative pi\`u importanti sono:
+\begin{itemize}
+	\item disabilitare protocolli obsoleti;
+	\item preferire suite moderne;
+	\item aggiornare le librerie crittografiche;
+	\item segmentare la rete con VLAN e firewall stateful;
+	\item usare VPN e SSH con configurazioni restrittive;
+	\item monitorare certificati, log e configurazioni.
+\end{itemize}
+
+\subsection{Difesa in profondit\`a}
+La sicurezza delle comunicazioni non dipende da un singolo controllo, ma da pi\`u livelli coordinati: cifratura, autenticazione, segmentazione, logging, monitoraggio e risposta agli incidenti.
+
+\section{Tabelle di confronto}
+
+\subsection{TLS e IPSec}
+\begin{table}[h]
+	\centering
+	\caption{Confronto sintetico tra TLS e IPSec}
+	\begin{tabular}{|p{3.5cm}|p{5.5cm}|p{5.5cm}|}
+		\hline
+		Caratteristica & TLS/HTTPS & IPSec \\
+		\hline
+		Livello OSI & Trasporto / applicazione & Rete \\
+		\hline
+		Trasparenza alle applicazioni & No, richiede integrazione & S\`i, \`e trasparente \\
+		\hline
+		Uso tipico & Web, API, client-server & Site-to-site VPN, traffico infrastrutturale \\
+		\hline
+		Interoperabilit\`a & Molto ampia & Dipende dalle implementazioni \\
+		\hline
+		Gestione chiavi & Certificati X.509, CA & SA, IKEv2 \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\subsection{Vulnerabilit\`a TLS}
+\begin{table}[h]
+	\centering
+	\caption{Principali vulnerabilit\`a TLS e mitigazioni}
+	\begin{tabular}{|p{3.5cm}|p{5cm}|p{5cm}|}
+		\hline
+		Vulnerabilit\`a & Impatto & Mitigazione \\
+		\hline
+		RC4 & Cifrario indebolito & Disabilitare RC4 \\
+		\hline
+		BEAST & Attacco su CBC con IV prevedibile & Usare TLS moderno e AEAD \\
+		\hline
+		Lucky Thirteen & Side-channel temporale & Implementazioni resistenti, AEAD \\
+		\hline
+		POODLE & Downgrade verso SSLv3 & Disabilitare SSLv3 \\
+		\hline
+		Heartbleed & Leak di memoria & Aggiornare OpenSSL e ruotare le chiavi \\
+		\hline
+		DROWN & Uso di SSLv2 su server correlati & Disabilitare SSLv2 \\
+		\hline
+		CRIME/BREACH & Leak tramite compressione & Evitare compressione su dati sensibili \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\subsection{Note finali sui comandi}
+Esempi utili da ricordare:
+\begin{verbatim}
+	openssl s_client -connect example.com:443 -servername example.com
+	ssh -vvv user@host
+	ssh -Q cipher
+\end{verbatim}
+
+\section{Conclusione}
+La protezione delle comunicazioni richiede l'uso corretto di protocolli moderni, attenzione alle implementazioni e hardening operativo continuo. Le difese devono essere stratificate: cifratura dei canali, segmentazione della rete, autenticazione forte, logging e monitoraggio. Per lo studio d'esame sono particolarmente importanti TLS, IPSec, VLAN, Tor, SSH e le vulnerabilit\`a storiche pi\`u note con le relative mitigazioni.
+
+\chapter{OpenSSL e Gestione PKI (Laboratorio)}
+
+\section{Introduzione a OpenSSL}
+OpenSSL è una libreria C multipiattaforma che implementa i principali protocolli crittografici, tra cui il Secure Socket Layer (SSL/TLS), algoritmi simmetrici, asimmetrici, funzioni di hash e la gestione delle firme digitali. 
+
+Per verificare la versione installata e ottenere la lista dei comandi (suddivisi in \textit{Standard}, \textit{Message Digest} e \textit{Cipher commands}), si utilizzano:
+\begin{lstlisting}[language=bash]
+	openssl version
+	openssl help
+\end{lstlisting}
+
+\subsection{Comandi Principali}
+\begin{itemize}
+	\item \textbf{enc}: Cifratura e decifratura con algoritmi simmetrici.
+	\item \textbf{genrsa} / \textbf{rsa}: Generazione e manipolazione di chiavi asimmetriche RSA.
+	\item \textbf{rsautl}: Cifratura, decifratura, firma e verifica con chiavi asimmetriche.
+	\item \textbf{dgst}: Calcolo dell'impronta (digest) tramite funzioni di hash.
+	\item \textbf{ca} / \textbf{x509} / \textbf{verify}: Creazione di una Certification Authority, manipolazione e verifica di certificati X.509.
+\end{itemize}
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Crittografia Simmetrica}
+Il comando \texttt{enc} permette di cifrare e decifrare file utilizzando vari algoritmi (verificabili con \texttt{openssl enc -ciphers}).\\
+OpenSSL supporta anche la transcodifica in \textbf{Base64} (che è una codifica, \textit{non} una cifratura, poiché reversibile senza chiave):
+\begin{lstlisting}[language=bash]
+	openssl enc -base64 -in file_in.txt
+\end{lstlisting}
+
+\subsection{Cifratura e Decifratura (AES-256-CBC)}
+Per proteggere effettivamente un file, si utilizza un algoritmo robusto come AES a 256 bit in modalità CBC.
+\begin{lstlisting}[language=bash]
+	# Cifratura
+	openssl enc -aes-256-cbc -md sha512 -pbkdf2 -iter 100000 -salt -in testo.txt -out cifrato.bin
+	
+	# Decifratura (aggiunta del flag -d)
+	openssl enc -aes-256-cbc -md sha512 -pbkdf2 -iter 100000 -salt -d -in cifrato.bin -out testo_chiaro.txt
+\end{lstlisting}
+
+\textbf{Spiegazione dei parametri essenziali:}
+\begin{itemize}
+	\item \texttt{-md sha512}: Specifica l'algoritmo di hashing (famiglia SHA-2) utilizzato nel processo.
+	\item \texttt{-pbkdf2} e \texttt{-iter 100000}: Utilizza la funzione \textit{Password-Based Key Derivation Function 2} eseguendo centomila iterazioni. Aumentare il numero di iterazioni rallenta significativamente i tentativi di attacco a forza bruta.
+\end{itemize}
+\textit{(Nota: è possibile passare la password inline con \texttt{-pass pass:"miapassword"}, ma è fortemente sconsigliato per motivi di sicurezza).}
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Crittografia Asimmetrica (RSA)}
+
+\subsection{Generazione e Gestione delle Chiavi}
+La lunghezza minima per considerare una chiave RSA sicura è di 2048 bit. La generazione crea un file \texttt{.pem} che contiene \textbf{sia la chiave privata che quella pubblica}.
+\begin{lstlisting}[language=bash]
+	# 1. Generazione della coppia di chiavi
+	openssl genrsa -out chiave.pem 2048
+	
+	# 2. Ispezione dei dettagli della chiave (modulo, esponenti, senza stampare il Base64)
+	openssl rsa -in chiave.pem -text -noout
+	
+	# 3. Protezione della chiave privata (cifratura del file PEM con AES)
+	openssl rsa -in chiave.pem -aes-256-cbc -out enc_chiave.pem
+	
+	# 4. Estrazione della chiave pubblica
+	openssl rsa -in chiave.pem -pubout -out pub_chiave.pem
+\end{lstlisting}
+
+\subsection{Cifratura e Decifratura asimmetrica}
+\begin{lstlisting}[language=bash]
+	# Cifratura (usa la chiave pubblica del destinatario)
+	openssl rsautl -encrypt -in testo.txt -inkey pub_chiave.pem -pubin -out cifrato_rsa.bin
+	
+	# Decifratura (usa la propria chiave privata)
+	openssl rsautl -decrypt -in cifrato_rsa.bin -inkey chiave.pem -out originale.txt
+\end{lstlisting}
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Firma Digitale}
+Poiché gli algoritmi a chiave pubblica sono troppo onerosi per firmare direttamente file di grandi dimensioni, la firma digitale si applica al \textbf{digest} (hash) del file originale.
+
+\begin{lstlisting}[language=bash]
+	# 1. Creazione dell'Hash (es. tramite MD5)
+	openssl dgst -md5 -out digestfile testo.txt
+	
+	# 2. Firma dell'Hash (utilizzando la propria chiave privata)
+	openssl rsautl -sign -in digestfile -out digest_firmato -inkey chiave.pem
+	
+	# 3. Verifica della Firma da parte del destinatario
+	openssl rsautl -verify -in digest_firmato -out digest_verifica -inkey chiave.pem
+	
+	# 4. Confronto per attestare l'integrita
+	diff digestfile digest_verifica
+\end{lstlisting}
+\textit{(Se il comando \texttt{diff} non produce output, i file sono identici e la firma è valida).}
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Configurazione di una PKI (Public Key Infrastructure) Locale}
+La PKI risolve il problema dell'attacco \textit{Man-in-the-Middle} fornendo un'entità centrale fidata (CA - Certification Authority) che certifica l'identità associata a una chiave pubblica. Questo approccio si contrappone al \textit{Web of Trust} decentralizzato tipico di PGP.\\
+Il file di configurazione principale per la CA su Linux si trova tipicamente in \texttt{/etc/ssl/openssl.cnf}.
+
+\subsection{Step 1: Creazione della Root CA}
+\begin{lstlisting}[language=bash]
+	# Generazione della chiave privata per la CA
+	openssl genrsa -out rootCA.key 2048
+	
+	# Creazione del certificato auto-firmato (Root Certificate) valido 10 anni
+	openssl req -x509 -new -key rootCA.key -days 3650 -out rootCA.pem
+	
+	# (Opzionale) Esportazione in formato DER per l'importazione nei browser
+	openssl x509 -in rootCA.pem -outform DER -out cacert.der
+\end{lstlisting}
+
+\subsection{Step 2: Generazione e Firma di un Certificato Client}
+Affinché un utente o un server ottenga un certificato valido, deve generare una chiave, creare una CSR (\textit{Certificate Signing Request}) e farla firmare alla CA.
+\begin{lstlisting}[language=bash]
+	# 1. Generazione della chiave dell'utente (client1)
+	openssl genrsa -out client1.key 2048
+	
+	# 2. Creazione della richiesta di certificato (CSR)
+	# Per lo standard Web PKI, andrebbe aggiunta l'estensione DNS: -addext "subjectAltName = DNS:www.dominio.com"
+	openssl req -new -key client1.key -out client1.csr
+	
+	# 3. La CA firma la CSR generando il certificato finale valido 1 anno
+	openssl x509 -req -days 365 -CA rootCA.pem -CAkey rootCA.key -CAcreateserial -copy_extensions copy -in client1.csr -out client1.pem
+\end{lstlisting}
+
+\subsection{Step 3: Verifica e Deploy su Apache}
+Per validare matematicamente l'autenticità del certificato client appena emesso, confrontandolo con quello della CA:
+\begin{lstlisting}[language=bash]
+	openssl verify -verbose -CAfile rootCA.pem client1.pem
+\end{lstlisting}
+Per applicare i certificati su un server web \textbf{Apache}:
+\begin{enumerate}
+	\item Importare \texttt{cacert.der} o \texttt{rootCA.pem} nel \textit{certificate store} del browser come CA fidata.
+	\item Entrare nella configurazione di Apache: \texttt{cd /etc/apache2/sites-enabled}.
+	\item Abilitare il modulo SSL: \texttt{ln -s ../sites-available/default-ssl.conf}.
+	\item Modificare \texttt{default-ssl.conf} per puntare a \texttt{client1.pem} (SSLCertificateFile) e \texttt{client1.key} (SSLCertificateKeyFile).
+	\item Riavviare il demone: \texttt{systemctl start apache2}.
+\end{enumerate}
 	
 \end{document}

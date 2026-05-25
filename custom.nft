@@ -1,0 +1,36 @@
+flush ruleset
+
+table ip filter {
+    chain input {
+        type filter hook input priority 0; policy drop; # Default Deny. Mettere accept per il Default Accept.
+
+        # Regole di base obbligatorie
+        iif "lo" accept
+        ct state established,related accept
+
+        # Inserire qui regole di INPUT personalizzate
+    }
+
+    chain forward {
+        type filter hook forward priority 0; policy drop; # Sempre Default Deny a meno che il nodo non stia facendo da router.
+
+        # Inserire qui regole di FORWARD (se il nodo fa da router)
+    }
+
+    chain output {
+        type filter hook output priority 0; policy accept; # Trust Local Processes
+    }
+}
+
+# Il blocco qui sotto è necessario solo se la macchina fa da Router/NAT
+table ip nat {
+    chain prerouting {
+        type nat hook prerouting priority dstnat; policy accept; # Tendenzialmente sempre accept, perchè è l'altra table che si occupa di filtrare.
+        # Inserire qui regole di DNAT
+    }
+
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept; # Tendenzialmente sempre accept, perchè è l'altra table che si occupa di filtrare.
+        # Inserire qui regole di SNAT / Masquerade
+    }
+}
