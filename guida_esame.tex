@@ -77,6 +77,52 @@
 	\tableofcontents
 	\newpage
 	
+	\chapter*{Introduzione - La Prova}
+	\addcontentsline{toc}{chapter}{Introduzione - Gestione dell'Esame e Setup}
+	
+	Prima di addentrarsi nelle tecniche specifiche, è fondamentale comprendere la struttura della prova pratica e preparare l'ambiente di lavoro in modo ottimale.\\\\
+	L'esame di Sicurezza Informatica si divide in due fasi principali:
+	\begin{enumerate}
+		\item \textbf{Prova Teorica:} Un test a risposte chiuse. Il risultato è immediato e la prova, pur avendo un tempo allocato di un'ora, viene solitamente completata in molto meno tempo. I minuti avanzati usali per fare il login, preparare l'ambiente, avviare le VM e creare gli snapshot prima che inizi la pratica.
+		\item \textbf{Prova Pratica (Open Book):} La prova operativa vera e propria. Il professore proporrà \textbf{4 esercizi scelti tra 5 macro-argomenti possibili}:
+		\begin{itemize}
+			\item \textbf{Privesc (Privilege Escalation):} Scalare i privilegi da utente standard a root sfruttando misconfigurazioni, SUID, cronjobs, ecc.
+			\item \textbf{Web Security:} Sfruttare vulnerabilità web (SQLi, LFI, Command Injection, XSS).
+			\item \textbf{Firewalling (Nftables):} Configurare regole di rete, NAT e port forwarding su più host virtuali.
+			\item \textbf{IDS (Suricata / Network Security):} Analizzare traffico (spesso con Wireshark) e scrivere regole Suricata per intercettare exploit specifici.
+			\item \textbf{Pwn (Binary Exploitation):} Sfruttare buffer overflow per dirottare l'esecuzione di binari vulnerabili.
+		\end{itemize}
+		Di questi 4 esercizi proposti, \textbf{ne dovrai scegliere e completare solo 3}.
+	\end{enumerate}
+	
+	\begin{nota}[Stesura del Report]
+		Indipendentemente dall'esercizio scelto, \textbf{è di fondamentale importanza scrivere sempre come mitigare la vulnerabilità che hai appena sfruttato}. Non limitarti a descrivere l'attacco, ma spiega sempre come patchare il sistema, correggere i permessi o filtrare l'input per prevenire l'intrusione.
+	\end{nota}
+	
+	\section*{Gestione del Tempo}
+	La prova di teoria, a risposte chiuse, fornisce un risultato immediato e di solito dura meno dell'ora allocata. Sfrutta i circa 15 minuti che avanzano prima della pratica per avvantaggiarti: prepara l'ambiente creando snapshot delle VM, organizza le cartelle e i file. 
+	\begin{nota}[Attenzione al Setup]
+		Se arrivi impreparato e l'ambiente non funziona per un tuo errore di configurazione, \textbf{non ti verrà concesso tempo extra}.
+	\end{nota}
+	
+	\section*{Gestione File, Backup e Appunti}
+	Assicurati di sapere come configurare e usare la cartella \textit{shared} tra la macchina virtuale e l'host. Inoltre, ricorda che:
+	\begin{itemize}
+		\item Puoi usare \textbf{EOL} come sistema di backup per salvare i progressi degli esercizi.
+		\item Prepara gli appunti in anticipo: potresti doverli caricare sulla macchina dell'esame il mercoledì precedente oppure portarli su chiavetta o trasferirli via SSH (ma fai attenzione, perché l'SSH non è sempre garantito).
+	\end{itemize}
+	
+	\subsection*{Decifratura Pacchetti d'Esame (GPG)}
+	Se all'inizio della prova i pacchetti applicativi forniti (\texttt{.deb}) sono protetti da cifratura (es. estensione \texttt{.deb.gpg}), occorre decifrarli tramite GPG prima di poterli installare nel sistema:
+	\begin{lstlisting}[language=bash]
+		# Decifra il pacchetto grezzo salvando l'output open-source
+		gpg -d file.deb.gpg > file.deb
+		
+		# Installa regolarmente il binario risultante
+		sudo dpkg -i file.deb
+	\end{lstlisting}
+	\newpage
+	
 	\chapter{Enumerazione}
 	
 	La fase iniziale di ogni attacco è l'enumerazione. L'obiettivo è mappare la superficie di attacco del bersaglio per scoprire quali host sono attivi, quali servizi espongono e preparare il terreno per i vettori di intrusione. 
@@ -385,18 +431,35 @@
 	\subsection{Exploitation}
 	Vediamo ora il workflow da usare per exploitare una vulnerabilità in un DBMS MySQL.
 	
-	\subsubsection{È MySQL?}
-	Per capire se ci troviamo davanti ad un DBMS MySQL, i segni solitamente sono:
+	\subsubsection{Riconoscere il DBMS: MySQL vs SQLite}
+	Per capire se ci troviamo davanti ad un DBMS MySQL, i segni esterni solitamente sono:
 	\begin{itemize}
-		\item Una porta la cui descrizione è letteralmente MySQL (o MariaDB).
-		\item Una porta la cui descrizione indica un server HTTP che è Apache o Nginx (dato che implica macchina linux, che a sua volta implica con grande probabilità MySQL).
-		\item Una porta la cui descrizione indica un server HTTp che è ISS e sappiamo la macchina essere Mycrosoft (?).
+		\item Una porta la cui descrizione (da Nmap) è letteralmente MySQL (o MariaDB).
+		\item La presenza di Apache/Nginx (che implica LAMP stack) o IIS.
 	\end{itemize}
-	Al di la di questo, in caso di Union Based SQLi basta mettere come query una variante (coi NULL aggiunti ecc) di:
+	A livello di iniezione, in caso di Union Based SQLi basta provare la seguente query (adattata col corretto numero di colonne e NULL):
 	\begin{lstlisting}[language=SQL]
-		SELECT @@version;
+		UNION SELECT @@version-- -
 	\end{lstlisting}
-	Questa query funziona unicamente su MySQL, quindi da la certezza. Detto tutto ciò è improbabile che metta qualcosa che non sia MySQL, quindi diciamo che al massimo può essere una cosa in più da mettere nel report per fare bella figura.
+	Questa query funziona unicamente su MySQL. Se restituisce la versione, hai la certezza.
+	
+	\begin{nota}[ATTENZIONE CRITICA: La Trappola di SQLite]
+		Fino a poco tempo fa si assumeva che gli esami fossero solo su MySQL, ma tracce recenti usano \textbf{SQLite}! Se provi a interrogare \texttt{information\_schema} e ottieni un errore, potresti essere su SQLite. Spesso lo si scopre empiricamente iniettando un banale \texttt{' OR '1'='1} che bypassa i controlli e rivela messaggi nascosti lasciati dagli sviluppatori a schermo.
+	\end{nota}
+	
+	\subsubsection{Enumerazione specifica per SQLite}
+	Se scopri di essere su SQLite, la sintassi cambia radicalmente poiché \textbf{non esiste} l'\texttt{information\_schema}:
+	\begin{itemize}
+		\item \textbf{Enumerazione delle Tabelle:} Al posto di \texttt{information\_schema.tables}, si usa la tabella di sistema \texttt{sqlite\_schema} (o \texttt{sqlite\_master}). La query da usare nella UNION è:
+		\begin{lstlisting}[language=SQL]
+			UNION SELECT type, name, tbl_name, NULL FROM sqlite_schema-- -
+		\end{lstlisting}
+		\item \textbf{Enumerazione delle Colonne (Il trucco del SELECT *):} SQLite non offre un modo semplice per estrarre programmaticamente i nomi delle singole colonne. L'approccio più rapido ed efficace all'esame è deduttivo: se hai scoperto (tramite i NULL) che la query originale usa 4 colonne e trovi una tabella interessante (es. \texttt{flags}), prova a fare direttamente:
+		\begin{lstlisting}[language=SQL]
+			UNION SELECT * FROM flags-- -
+		\end{lstlisting}
+		Se per pura fortuna anche la tabella target ha esattamente 4 colonne, i dati verranno stampati a schermo bypassando la necessità di conoscerne i nomi.
+	\end{itemize}
 	
 	\subsubsection{L'Enumerazione del DBMS con Information\_Schema}
 	Questo Schema di sistema contiene informazioni come:
@@ -525,8 +588,16 @@
 	\end{nota}
 	
 	\begin{nota}[NOTA FINALE:]
-		La fonte di questo file è il corso gratuito HTB che trovate al link https://academy.hackthebox.com/app/module/33. Tale corso include anche una sezione sul come evitare le SQLi ed un caso d'uso reale molto interessante che però comprende anche un utilizzo avanzato di Burp Suite; ho tralasciato tali sezioni in quanto questo documento è volto allo svolgimento dell'esame.
+		La fonte di gran parte di queste logiche è il modulo HTB: \url{https://academy.hackthebox.com/app/module/33}. Sono state tralasciate in questa guida le sezioni relative all'uso avanzato di Burp Suite in quanto non strettamente necessarie per le tempistiche d'esame.
 	\end{nota}
+	
+	\subsection{Mitigazione delle SQL Injection (Obbligatoria da Report)}
+	Come indicato nell'introduzione, all'esame è richiesto di descrivere l'errore di progettazione e proporne la risoluzione. Ecco il glossario tecnico da inserire sempre nel report a chiusura dell'esercizio:
+	\begin{itemize}
+		\item \textbf{Causa Radice:} "La vulnerabilità è dovuta ad una mancata sanitizzazione e validazione dei dati in input passati dall'utente. L'input (es. il parametro in GET) viene concatenato direttamente all'interno della query SQL, permettendo all'attaccante di alterarne la logica sintattica."
+		\item \textbf{Mitigazione 1 (Prepared Statements):} "La soluzione definitiva per prevenire l'iniezione consiste nell'evitare l'uso diretto di interpreti SQL tramite concatenazione di stringhe. Occorre utilizzare le query pre-compilate (\textit{Prepared Statements} basate sull'operatore \texttt{PREPARE}) offerte nativamente dai framework moderni. In questo modo, l'input viene trattato dal DBMS esclusivamente come dato isolato e non come codice eseguibile."
+		\item \textbf{Mitigazione 2 (Input Validation / Allow-listing):} "In via aggiuntiva, è necessario implementare un filtraggio rigoroso dell'input lato backend, possibilmente utilizzando una logica di \textit{Allow-listing} che accetti solo un elenco esplicito di valori pre-approvati (es. forzare rigorosamente il \textit{casting} a intero se l'applicazione si aspetta un ID numerico)."
+	\end{itemize}
 	
 	\section{File Inclusion}
 	
@@ -1019,7 +1090,7 @@
 		${alert(document.domain)}
 	\end{lstlisting}
 	
-	\chapter{Binary Exploits (Stack-Based Buffer Overflow)}	
+	\chapter{Binary Exploits}	
 	
 	\section{Introduzione e Concetti Base}
 	Un buffer overflow si verifica quando i dati inseriti in un buffer superano la sua capacità allocata, andando a sovrascrivere la memoria adiacente. Sfruttando questa vulnerabilità e scrivendo dati mirati, è possibile sovrascrivere gli indirizzi di ritorno e dirottare il flusso di esecuzione del programma verso codice arbitrario.	\\\\
@@ -1030,7 +1101,8 @@
 		\begin{lstlisting}[language=bash]
 			cat /proc/sys/kernel/randomize_va_space
 		\end{lstlisting}
-		Se il valore restituito è 1 o 2, l'ASLR è attivo e l'exploit fallirà. Per disabilitarlo: \texttt{echo 0 > /proc/sys/kernel/randomize\_va\_space}.
+		Se il valore restituito è 1 o 2, l'ASLR è attivo e l'exploit fallirà. Per disabilitarlo: \texttt{echo 0 > /proc/sys/kernel/randomize\_va\_space}.\\\\
+		Mettere a 0 il \texttt{randomize\_va\_space} è un'azione che il professore richiede \textbf{\textit{esplicitamente}} di fare per l'esecuzione degli esercizi. Puoi e devi eseguirla, \textbf{anche se richiede l'uso di} \texttt{sudo}.
 	\end{nota}
 	
 	\section{Registri CPU essenziali ed Endianness}
@@ -1061,6 +1133,34 @@
 		$(perl -e 'print "A"x100')
 	\end{lstlisting}
 	Questo approccio è essenziale per generare velocemente il padding e concatenare gli indirizzi formattati in hex.
+	
+	\section{Ricognizione Iniziale e Reverse Engineering Base}
+	
+	All'esame spesso \textbf{non si ha il codice sorgente} dell'eseguibile vulnerabile. Prima di tentare un exploit o calcolare gli offset, è vitale mappare il funzionamento del binario sia staticamente che dinamicamente per scoprirne i segreti (come password nascoste).
+	
+	\subsection{Analisi Statica Rapida (strings)}
+	Prima ancora di aprire il debugger, esegui sempre un'analisi delle stringhe hardcodate nel binario:
+	\begin{lstlisting}[language=bash]
+		strings nome_binario
+	\end{lstlisting}
+	Questo comando stampa a schermo tutti i caratteri testuali leggibili. Spesso rivela password banali in chiaro o messaggi di successo/errore che aiutano a intuire la logica del programma senza dover leggere direttamente il codice macchina.
+	
+	\subsection{Analisi Dinamica e Mappatura (GDB)}
+	Una volta aperto il binario in GDB (\texttt{gdb ./nome\_binario}), i primi passi per orientarsi "al buio" sono:
+	\begin{itemize}
+		\item \textbf{\texttt{info functions}}: Trova tutte le funzioni caricate. Cerca nomi sospetti (es. \texttt{reveal}, \texttt{give\_shell}, \texttt{print\_flag}, \texttt{check}) e appuntati subito i loro indirizzi esadecimali.
+		\item \textbf{\texttt{disas main}}: Leggi l'assembly della funzione principale per vedere il flusso di base e capire quali altre funzioni di controllo vengono richiamate.
+	\end{itemize}
+	
+	\subsection{Il trucco del Breakpoint su strcmp (Recupero Password Offuscate)}
+	Se la password non è in chiaro ma viene mascherata tramite XOR o calcolata a runtime, \texttt{strings} fallirà. Tuttavia, al momento del controllo finale, la tua password errata e quella segreta \textbf{devono essere confrontate in chiaro} in memoria.
+	\begin{enumerate}
+		\item Usa \texttt{disas nome\_funzione} (es. \texttt{disas check}) per visualizzare il codice assembly della funzione di validazione.
+		\item Cerca la riga dove viene chiamata la funzione di comparazione delle stringhe: \texttt{call <strcmp@plt>}.
+		\item Metti un breakpoint un attimo prima di quella chiamata usando il suo indirizzo esadecimale: \texttt{b *0x0804xxxx}.
+		\item Lancia il programma con \texttt{run} e inserisci una password fittizia.
+		\item Quando l'esecuzione si ferma al breakpoint, ispeziona la memoria per svelare la password. I valori da confrontare si trovano nei registri o in cima allo stack. Usa \texttt{x/1s \$eax} (oppure guarda la cima dello stack con \texttt{x/2xw \$esp} per vedere i puntatori e poi \texttt{x/1s [indirizzo\_trovato]}) per stampare la password segreta in chiaro a schermo!
+	\end{enumerate}
 	
 	\section{Metodologia di Exploitation}
 	Per prendere il controllo del registro EIP, è necessario determinare l'esatto \textit{offset}, ovvero il numero preciso di byte di padding richiesti per sovrascrivere l'EBP salvato prima di raggiungere l'indirizzo di ritorno. \\\\
@@ -1200,6 +1300,20 @@
 	
 	L'accesso come utente legittimo su una macchina compromessa dà solitamente privilegi molto limitati. L'obiettivo della Privilege Escalation è sfruttare vulnerabilità locali o errori di configurazione per elevare questi privilegi (tipicamente diventando l'utente \texttt{root}).
 	
+	\begin{nota}[Setup Ambiente]
+	 Per gli esercizi di \textit{Privilege Escalation} è imperativo partire da un ambiente incontaminato. Usa una VM Linux nuova o ripristina uno snapshot pulito dove non hai ancora svolto esercitazioni. Qualora gli snapshot dovessero corrompersi o darti problemi strani, si può tranquillamente \textbf{ricreare una macchina virtuale da capo}.
+	\end{nota}
+	
+	\begin{nota}[Gestione dei Falsi Positivi / Vicoli Ciechi]
+		Negli esercizi ci saranno sicuramente dei \textbf{falsi positivi}. Segnalarli nel report dimostra al professore un'ottima capacità analitica e fa risparmiare tempo. Ecco i più comuni:
+		\begin{itemize}
+			\item \textbf{File di Backup:} I file che finiscono con un trattino (es. \texttt{/etc/passwd-}) sono solo vecchi file di backup generati in automatico. Segnalali ma ignorali operativamente.
+			\item \textbf{Directory con SGID:} Il bit S (SGID) su una \textit{directory} (es. \texttt{drwxrwsr-x}) fa solo in modo che i file creati al suo interno ereditino il gruppo della directory, ma \textbf{non} fornisce privilegi di esecuzione scalati. È un vicolo cieco.
+			\item \textbf{ACL estese senza SUID/Capabilities:} Un binario con permessi \texttt{rwx} completi per il tuo utente (grazie a una ACL manipolata) ma sprovvisto di bit SUID o capabilities è inefficace: pur potendolo sovrascrivere, bisognerebbe aspettare che root lo esegua (evento che in un ambiente di laboratorio statico non avviene).
+		\end{itemize}
+	\end{nota}
+	
+
 	\section{I Fondamentali: Il Contesto}
 	Non si attacca alla cieca. Prima di agire, dobbiamo enumerare il sistema per individuare i punti deboli. I principali vettori di attacco su Linux includono:
 	\begin{itemize}
@@ -1209,6 +1323,20 @@
 		\item \textbf{Demoni e Cron Jobs:} Script o servizi eseguiti in background da root all'interno dei quali possiamo iniettare codice malevolo.
 		\item \textbf{ACL e Capabilities:} Permessi granulari o "superpoteri" frammentati assegnati in modo non sicuro.
 	\end{itemize}
+	
+	\begin{nota}[Movimento Laterale via Chiavi SSH]
+		Non sempre l'escalation a \texttt{root} è diretta. Spesso lo scenario richiede un \textbf{movimento laterale} (cambio utente, es. da utente base a \texttt{guest}) per ereditare l'appartenenza a gruppi specifici e poter così attivare vulnerabilità (come SUID o file scrivibili) che per l'utente base erano inerti.
+		
+		Se analizzando il sistema (es. tramite il report di AIDE) scopri una nuova directory contenente una chiave privata OpenSSH (tipicamente nominata \texttt{id\_guest} o \texttt{id\_rsa}):
+		\begin{enumerate}
+			\item \textbf{Ispezione:} Conferma la natura del file digitando \texttt{file id\_guest}.
+			\item \textbf{Sanitizzazione dei permessi:} Il demone SSH rifiuta categoricamente chiavi private con permessi troppo larghi. È mandatorio restringerli: \texttt{chmod 400 id\_guest}.
+			\item \textbf{Pivoting locale:} Esegui il login per cambiare identità restando sulla stessa macchina puntando a localhost:
+			\begin{lstlisting}[language=bash]
+				ssh -i id_guest guest@localhost
+			\end{lstlisting}
+		\end{enumerate}
+	\end{nota}
 	
 	\begin{nota}[Ottimizzazione della ricerca in Laboratorio]
 		Lanciare una ricerca ricorsiva dalla radice (\texttt{/}) può essere estremamente lento in ambienti di laboratorio a causa delle dimensioni del disco. Per velocizzare il processo, conviene limitare la ricerca alle \textbf{cartelle più probabili} in cui si trovano eseguibili, script o file di configurazione personalizzati:
@@ -1235,6 +1363,10 @@
 		\begin{lstlisting}[language=bash]
 			aide -c /etc/aide/aide.conf -i
 		\end{lstlisting}
+		\textbf{ATTENZIONE:} Il database appena generato non è subito attivo! Devi forzarne l'attivazione sovrascrivendo quello di default con questo comando vitale:
+		\begin{lstlisting}[language=bash]
+			sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+		\end{lstlisting}
 		\textit{(Il flag \texttt{-i} sta per init. Nota: in alcune configurazioni potrebbe essere necessario rinominare il database generato per renderlo quello attivo, es. \texttt{mv aide.db.new aide.db})}.
 		
 		\item \textbf{Esecuzione del check di integrità:}
@@ -1249,11 +1381,12 @@
 	L'output stamperà una tabella riassuntiva. Cerca le deviazioni nella colonna dei permessi (es. l'aggiunta di una \texttt{s} nei permessi di un binario di sistema come \texttt{/usr/bin/cp}), oppure variazioni negli hash (SHA256) che indicano che il contenuto del file è stato alterato.
 	
 	\subsection{Configurazione Mirata}
-	Il file di configurazione (\texttt{/etc/aide/aide.conf}) definisce quali cartelle monitorare e \textit{cosa} controllare di quei file. Se devi aggiungere una regola per monitorare una directory specifica, usa questa sintassi:
+	Il file di configurazione (\texttt{/etc/aide/aide.conf}) definisce quali cartelle monitorare e \textit{cosa} controllare di quei file. Per gli esami, l'approccio più rapido ed efficace è aprire il file di configurazione e aggiungere in fondo il monitoraggio aggressivo "Full" per le directory chiave:
 	\begin{lstlisting}[language=bash]
-		# Sintassi: [Directory] [Regole]
-		/usr/bin p+i+u+g+sha256
+		/usr/bin f Full
+		/etc f Full
 	\end{lstlisting}
+	\textit{Nota: Se preferisci la sintassi granulare personalizzata, puoi usare invece formati come \texttt{/usr/bin p+i+u+g+sha256}}.
 	\textbf{Significato delle regole principali:}
 	\begin{itemize}
 		\item \texttt{p}: permessi
@@ -1508,15 +1641,18 @@
 	\subsection{Vettori Operativi di Escalation}
 	
 	\subsubsection{Vettore 1: CAP\_DAC\_OVERRIDE su un editor di testo}
-	La capability \texttt{CAP\_DAC\_OVERRIDE} permette al processo di ignorare completamente tutti i controlli sui permessi di lettura, scrittura ed esecuzione di file e directory, consentendo di manipolare qualunque oggetto sul filesystem.
-	
+	La capability \texttt{CAP\_DAC\_OVERRIDE} permette al processo di ignorare completamente tutti i controlli sui permessi di lettura, scrittura ed esecuzione, consentendo di manipolare qualunque oggetto sul filesystem.
 	\begin{itemize}
 		\item \textbf{Lo Scenario:} Troviamo che \texttt{nano} o \texttt{vim.tiny} possiede la capability \texttt{cap\_dac\_override=eip}.
-		\item \textbf{L'Exploit:} Possiamo aprire direttamente l'editor per modificare file critici normalmente accessibili solo a root:
+		\item \textbf{L'Exploit (Rimozione Password Root):} Apriamo direttamente l'editor per modificare un file critico come \texttt{/etc/passwd}:
 		\begin{lstlisting}[language=bash]
-			nano /etc/passwd
+			vim.tiny /etc/passwd
 		\end{lstlisting}
-		Inseriamo la riga per l'utente \texttt{toor} senza password in coda al file e salviamo.
+		Invece di creare utenti fittizi, cerca la riga di root (\texttt{root:x:0:0...}) e \textbf{cancella la "x"} (facendola diventare \texttt{root::0:0...}). Questo rimuove la richiesta di password per l'utente root originario.
+		\item \textbf{Forzatura del Salvataggio (!):} Poiché sei loggato con un utente a basso privilegio (es. \texttt{guest}), l'editor ti avviserà che il file è in sola lettura. Per salvare la modifica, devi \textbf{forzare la scrittura} sfruttando la capability con il comando:
+		\begin{lstlisting}[language=bash]
+			:w!
+		\end{lstlisting}
 		\item \textbf{Il Dettaglio Tecnico Importante:} Non è possibile lanciare comandi shell dall'interno di vim (es. con \texttt{:!cat /etc/shadow}) sperando di sfruttare la capability. Questo accade perché \texttt{bash} (e \texttt{sh}), per motivi di sicurezza intrinseci, effettua il drop (l'abbandono) di tutte le capabilities ereditate non appena viene inizializzata. L'attacco deve quindi avvenire modificando il file \textit{direttamente} dentro l'interfaccia dell'editor.
 	\end{itemize}
 	
@@ -1639,6 +1775,17 @@
 		\item \textbf{Linguaggio a regole:} Utilizza file di configurazione testuali contenenti istruzioni logiche stringenti per indicare al motore quali pacchetti segnalare.
 	\end{itemize}
 	
+	\begin{nota}[CRITICO: Il limite di Layer 2 e l'ARP Spoofing]
+		Suricata è un HIDS/NIDS che opera esclusivamente dal \textbf{Layer 3 (IP)} in su. Di conseguenza, \textbf{non può lavorare a Layer 2}: è strutturalmente impossibile scrivere una regola Suricata che attivi un alert basandosi direttamente sui MAC address.
+		
+		Se lo scenario d'esame propone un attacco di Layer 2 come l'\textbf{ARP Spoofing} (in cui l'attaccante invia risposte spontanee per avvelenare le tabelle della subnet), il workaround richiesto consiste nel:
+		\begin{enumerate}
+			\item Mappare gli host leciti e "buoni" della rete.
+			\item Isolare l'IP anomalo dell'attaccante tramite l'analisi preliminare del traffico.
+			\item Scrivere le regole concentrando l'alerting sul traffico a livello IP (Layer 3) generato da o diretto verso quell'IP malevolo.
+		\end{enumerate}
+	\end{nota}
+	
 	\section{Cattura e Analisi Pratica del Traffico}
 	Prima di poter scrivere una regola, devi eseguire l'attacco, intercettarlo e ispezionarlo per capire quale sia la sua esatta "firma".
 	
@@ -1660,6 +1807,13 @@
 		\item Si aprirà una finestra testuale con l'intera conversazione: i dati in input inviati dall'attaccante in \textbf{rosso}, e le risposte del server in \textbf{blu}.
 	\end{enumerate}
 	L'obiettivo è guardare il testo in rosso ed estrarre la stringa o i byte unici che caratterizzano la vulnerabilità sfruttata.
+	
+	\subsection{Metodologia di Analisi e Ricognizione Rete}
+	Il modo migliore per iniziare l'esercizio non è aprire subito Suricata, ma studiare la traccia su Wireshark ordinando e filtrando il traffico per protocollo per mappare la rete:
+	\begin{itemize}
+		\item \textbf{Filtri \texttt{http, icmp, smtp, dhcp, dns}:} Permettono di osservare le comunicazioni standard e isolare quali indirizzi IP fanno traffico normale e lecito (es. individuare il Gateway o il DNS server).
+		\item \textbf{Filtro \texttt{arp}:} Essenziale se si sospetta un ARP Spoofing / Man-in-the-Middle. Cerca la presenza massiva di \textit{Risposte Spontanee} (Gratuitous ARP) non sollecitate. Confrontando i MAC address di questi pacchetti con il traffico legittimo studiato in precedenza, potrai isolare con certezza l'IP e il MAC dell'attaccante.
+	\end{itemize}
 	
 	\section{Componenti e Sintassi delle Regole Suricata}
 	Le regole si scrivono tipicamente in un file (es. \texttt{/etc/suricata/rules/fwids.rules}). La struttura sintattica è fissa e divisa in due parti: l'\textbf{Intestazione} (direzione e filtri di rete) e le \textbf{Opzioni} (cosa cercare nel pacchetto, racchiuse tra parentesi tonde).
@@ -1718,6 +1872,18 @@
 		\end{itemize}
 	\end{itemize}
 	
+	\subsection{Definizione di Variabili Globali (suricata.yaml)}
+	Per evitare di inserire manualmente elenchi infiniti di indirizzi IP all'interno delle singole regole (rischiando errori di battitura), è un'eccellente pratica d'esame definire dei gruppi personalizzati nella sezione \texttt{address-groups} del file \texttt{suricata.yaml}:
+	\begin{lstlisting}[language=bash]
+		# All'interno di suricata.yaml -> address-groups:
+		GOOD_NET: "[172.21.1.1,172.21.1.65,172.21.1.140,172.21.1.153]"
+		BAD_NET: "!$GOOD_NET"
+	\end{lstlisting}
+	In questo modo, all'interno del tuo file di regole potrai richiamare direttamente le variabili, scrivendo payload estremamente compatti e robusti:
+	\begin{lstlisting}
+		alert ip $BAD_NET any <> any any (msg:"TRAFFICO DA IP SOSPETTO"; sid:1000002; rev:1;)
+	\end{lstlisting}
+	
 \begin{nota}[Documentazione Suricata]
 	Raccogliere in un unico documento di appunti tutte le infinite opzioni, i modificatori e le combinazioni sintattiche delle regole di Suricata sarebbe un'impresa infattibile e controproducente. Nel caso, usare la \textbf{Documentazione Ufficiale di Suricata} (da scaricare in PDF da internet). 
 \end{nota}
@@ -1764,26 +1930,43 @@
 	\end{lstlisting}
 	Usando il protocollo generico \texttt{ip} e mettendo l'URL come destinazione fissa (Suricata lo risolverà internamente), la regola scatterà per qualsiasi comunicazione TCP, UDP o ping ICMP diretta a quel server.
 	
-	\section{Test e Ispezione dei Log (eve.json)}
-	Dopo aver salvato le regole (es. in \texttt{fwids.rules}) e aver riavviato Suricata, si esegue nuovamente l'attacco. Se tutto funziona, Suricata genererà un log per l'alert.\\\\
-	Il log degli alert viene salvato in formato JSON (dove ogni evento è un'unica, lunghissima riga incomprensibile) nel file \texttt{/var/log/suricata/eve.json}. 
-	Per leggere e formattare i log in tempo reale sul terminale, utilizza \textbf{\texttt{jq}} (un tool a riga di comando installato su macchine come Kali/Parrot, utile per colorare e "andare a capo" nei file JSON):
+	\section{Esecuzione Offline e Ispezione dei Log}
+	In sede d'esame, per testare l'efficacia delle tue regole custom contro il file di cattura pacchetti (\texttt{.pcap} o \texttt{.pcapng}) fornito dal professore, dovrai lanciare Suricata in modalità di analisi offline.
+	
+	\subsection{Comando di Analisi Offline}
+	Lancia il motore specificando il file di configurazione, il file delle regole e la traccia di rete:
 	\begin{lstlisting}[language=bash]
-		tail -f /var/log/suricata/eve.json | jq 'select(.event_type=="alert")'
+		suricata -c suricata.yaml -S exam.rules -r nome_traccia.pcapng
 	\end{lstlisting}
+	\textbf{Significato dei flag:}
 	\begin{itemize}
-		\item \texttt{tail -f}: Resta in ascolto continuo sul file, catturando ogni nuova riga appena scritta.
-		\item \texttt{jq 'select(...)'}: Prende l'output disordinato di tail, scarta il traffico normale e mostra a schermo formattato solo l'intero blocco JSON associato all'evento "\texttt{alert}".
+		\item \texttt{-c}: Percorso del file di configurazione globale (\texttt{suricata.yaml}).
+		\item \texttt{-S}: Carica il tuo file specifico contenente solo le regole custom (es. \texttt{exam.rules}).
+		\item \texttt{-r}: Indica a Suricata di analizzare offline il file PCAP specificato.
 	\end{itemize}
 	
-	\begin{nota}
-		Se \texttt{jq} non dovesse essere installato sulla macchina d'esame, puoi usare \texttt{grep} come soluzione di fallback rapida:
-		\begin{lstlisting}[language=bash]
-			tail -f /var/log/suricata/eve.json | grep "alert"
-		\end{lstlisting}
-	\end{nota}
+	\subsection{Lettura dei Risultati: fast.log vs eve.json}
+	Suricata genererà l'output all'interno della cartella locale o in \texttt{/var/log/suricata/}. I file chiave sono due:
+	\begin{enumerate}
+	\item \textbf{\texttt{fast.log} (Consigliato all'esame):} Produce una riga di testo semplice per ogni alert scattato. È immediato, pulito e velocissimo da leggere:
+	\begin{lstlisting}[language=bash]
+		cat fast.log
+	\end{lstlisting}
+	\item \textbf{\texttt{eve.json} (Log Strutturato):} Registra eventi dettagliati in formato JSON. Per filtrare ed esaminare solo gli alert andati a segno, formattando il testo a capo, usa \texttt{jq}:
+	\begin{lstlisting}[language=bash]
+		cat eve.json | jq 'select(.event_type=="alert")'
+	\end{lstlisting}
+	\textit{Soluzione di fallback con grep (se \texttt{jq} è assente):}
+	\begin{lstlisting}[language=bash]
+		cat eve.json | grep "alert"
+	\end{lstlisting}
+	\end{enumerate}
 	
 	\chapter{Firewalling e Filtering}
+	
+	\begin{nota}[Traffico Wireshark]
+		\textbf{Importante per il report:} Nelle esercitazioni e all'esame su nftables, spesso ti viene chiesto di catturare il traffico con Wireshark. Ricordati di descrivere e motivare nel report anche i tipi di traffico \textbf{NON malevoli} che rilevi transitare sulla rete.
+	\end{nota}
 	
 	\section{Introduzione a nftables e Concetti Base}
 	
@@ -1799,6 +1982,35 @@
 		\item \textbf{Regole (Rules)}: Le istruzioni atomiche. Sono lette dall'alto verso il basso: la prima che verifica una condizione (\textit{match}) ed emette un verdetto risolutivo (\textit{verdict}) decide il destino del pacchetto, interrompendo l'analisi.
 	\end{enumerate}
 	
+	\subsubsection*{Priorità e Flusso dei Pacchetti}
+	Il percorso e l'ordine con cui i pacchetti vengono processati dal firewall non sono cablati in modo rigido, ma dipendono strettamente dall'attributo \texttt{priority} associato a ciascuna catena:
+	
+	\begin{itemize}
+		\item \textbf{Il fattore determinante: La Priority:} Se più tabelle o catene si agganciano allo stesso punto di controllo del kernel (\textit{Hook}), l'ordine di esecuzione è regolato dal loro valore numerico. I valori minori o negativi vengono elaborati sempre per primi.
+		
+		\item \textbf{Significato delle Priority Standard:} Nel codice si utilizzano parole chiave convenzionali che corrispondono a precisi valori numerici fissi del kernel Linux:
+		\begin{itemize}
+			\item \texttt{dstnat} (Valore: \texttt{-100}): Utilizzata nell'hook di \texttt{prerouting}. Essendo fortemente negativa, garantisce che la traduzione dell'IP di destinazione avvenga subito, \textit{prima} di qualsiasi altra valutazione.
+			\item \texttt{filter} (Valore: \texttt{0}): La priorità standard per il filtraggio ordinario dei pacchetti e per le decisioni di sicurezza (applicata di default a \texttt{input}, \texttt{forward} e \texttt{output}).
+			\item \texttt{srcnat} (Valore: \texttt{100}): Utilizzata nell'hook di \texttt{postrouting}. È positiva perché la modifica dell'IP sorgente (\textit{Masquerade}) deve avvenire solo alla fine, ovvero dopo che le regole di sicurezza hanno effettivamente autorizzato il pacchetto a transitare.
+		\end{itemize}
+		
+		\item \textbf{Il Flusso Cronologico degli Hook risultante:} A causa dei valori di \texttt{priority} sopra elencati, il ciclo di vita di un pacchetto segue questo flusso temporale e logico:
+		\begin{enumerate}
+			\item \texttt{prerouting} (Priority \texttt{-100}): Modifica preventiva della destinazione (DNAT / Port Forwarding).
+			\item \textit{Decisione di Routing}: Il kernel esamina l'IP del pacchetto e ne determina la destinazione finale.
+			\item \textbf{Bivio di Filtraggio (Hook mutuamente esclusivi, tutti con Priority \texttt{0}):} A seconda della decisione di routing, il pacchetto percorre \textbf{solo una} di queste strade nella tabella Filter:
+			\begin{itemize}
+				\item \texttt{input}: Se il pacchetto è destinato alla macchina stessa.
+				\item \texttt{forward}: Se la macchina fa da router e il pacchetto è solo in transito.
+				\item \texttt{output}: Se il pacchetto è generato localmente da un'applicazione della macchina stessa.
+			\end{itemize}
+			\item \texttt{postrouting} (Priority \texttt{100}): Mascheramento finale dell'IP sorgente (SNAT / Masquerade) un attimo prima dell'uscita fisica sulla rete.
+		\end{enumerate}
+		
+		\item \textbf{Lettura delle Regole:} All'interno di ogni singola catena, le regole vengono lette rigorosamente dall'alto verso il basso (\textbf{Top-Down}). Vale il principio \textit{First Match Wins}: il primo verdetto risolutivo (\texttt{accept} o \texttt{drop}) interrompe immediatamente l'analisi e le regole sottostanti vengono ignorate.
+	\end{itemize}
+	
 	\begin{nota}[DOCUMENTAZIONE UFFICIALE]
 		Per qualsiasi dubbio sulla sintassi o sulle opzioni durante l'esame, ricorda che il manuale di sistema è la risorsa definitiva. Eseguendo il comando \texttt{man nftables} da terminale troverai letteralmente tutto quello che potresti mai voler sapere sul framework.
 	\end{nota}
@@ -1808,42 +2020,60 @@
 	La prima cosa da fare è creare l'infrastruttura. A differenza di quanto si possa pensare, \textbf{in nftables i nomi di tabelle e catene sono totalmente arbitrari}. \\\\
 	Se creiamo una tabella e una catena così:
 	\begin{lstlisting}[language=bash]
-		nft add table ip filter
-		nft add chain ip filter input { type filter hook input priority 0 \; policy drop \; }
+		nft add table inet filter
+		nft add chain inet filter input { type filter hook input priority filter \; policy drop \; }
 	\end{lstlisting}
-	La parola \texttt{filter} (dopo \texttt{ip}) e la parola \texttt{input} (dopo \texttt{filter}) sono solo nomi di fantasia scelti per convenzione. La vera magia avviene dentro le parentesi graffe:
+	La parola \texttt{filter} (dopo \texttt{inet}) e la parola \texttt{input} (dopo \texttt{filter}) sono solo nomi di fantasia scelti per convenzione. La famiglia \textbf{\texttt{inet}} è considerata più elegante e completa rispetto a \textbf{\texttt{ip}} perché raggruppa sia IPv4 che IPv6 (mentre le tabelle NAT richiederanno strettamente la divisione in \texttt{ip} o \texttt{ip6}). La vera magia avviene dentro le parentesi graffe:
 	\begin{itemize}
 		\item \textbf{\texttt{type filter}}: È la direttiva che dice al kernel "questa catena serve ad accettare o scartare pacchetti".
 		\item \textbf{\texttt{hook input}}: È il vero aggancio fisico. Ordina al kernel di dirottare in questa catena tutto il traffico destinato alla macchina locale.
-		\item \textbf{\texttt{priority 0}}: Stabilisce l'ordine di esecuzione (0 è lo standard per il filtraggio).
-		\item \textbf{\texttt{policy drop}}: L'azione di default se nessuna regola fa match. \texttt{drop} implementa un modello \textit{Default Deny} (passa solo ciò che è esplicitamente autorizzato).
+		\item \textbf{\texttt{priority filter}}: Stabilisce l'ordine di esecuzione (\texttt{filter} sostituisce il vecchio \texttt{0} come standard per la tabella filter).
+		\item \textbf{\texttt{policy drop}}: L'azione di default se nessuna regola fa match. \texttt{drop} implementa un modello \textbf{Default Deny}. \\
 	\end{itemize}
-	
-	\begin{nota}[BEST PRACTICE]
-		Lavorare da riga di comando è rischioso. È prassi standard scrivere tutte le regole in un file (es. \texttt{fw.nft}) e caricarle in blocco con \texttt{nft -f fw.nft}.
-		Inizia \textbf{sempre} il file con \texttt{flush ruleset}: questo comando svuota la memoria del firewall prima di caricare le nuove regole, evitando conflitti o duplicati se ricarichi lo script più volte.
+	\begin{nota}[IMPORTANTE: Scelta della Policy di Default]
+		Prima di iniziare a scrivere, leggi con estrema attenzione l'ultima riga della consegna dell'esercizio. 
+		\begin{itemize}
+			\item Spesso il professore specifica: \textit{"Tutto ciò che non è elencato deve essere bloccato"}. In questo caso, devi impostare una \textbf{policy drop} e scrivere esplicitamente le regole per autorizzare sia l'andata che il ritorno di ogni comunicazione permessa.
+			\item Se invece specifica: \textit{"Tutto ciò che non è elencato deve essere permesso"}, imposterai una \textbf{policy accept} e scriverai le regole \textbf{solo} per bloccare le comunicazioni vietate (molto più raro, ma possibile).
+		\end{itemize}
+		\textbf{In sintesi:} La policy cambia drasticamente il numero di regole da scrivere (ad esempio, con \texttt{policy drop} in \texttt{output} devi autorizzare esplicitamente la macchina a poter rispondere). \textit{Se la traccia non specifica assolutamente nulla, assumi sempre un modello Default Deny (\texttt{policy drop}) ovunque.}
 	\end{nota}
-	\textbf{Struttura file \texttt{fw.nft}}:
+	
+	\begin{nota}[Organizzazione dei File .nft]
+		Lavorare da riga di comando è rischioso. Per l'esame, è stato dato l'OK per strutturare il lavoro a file nel seguente modo:
+		\begin{itemize}
+			\item Crea un file \texttt{.nft} per ogni host coinvolto nella rete (es. \texttt{server.nft}, \texttt{client.nft}, \texttt{r1.nft}), in cui scrivere le regole specifiche da applicare a quella macchina.
+			\item Crea un file di supporto \textbf{\texttt{definizioni.nft}} per dichiarare i vari indirizzi IP e le variabili globali usando la direttiva \texttt{define}. Questo ti salva la vita all'esame: se sbagli a digitare un IP o una subnet (es. \texttt{10.20.0.0/22}), lo correggi in un solo punto invece di dover ricontrollare 20 regole diverse:
+			\begin{lstlisting}[language=bash]
+				define NET\_CLIENTS = 10.20.0.0/22
+				define SERVER_IP   = 192.168.1.7
+			\end{lstlisting}
+			\end{itemize}
+		\textbf{Importante:} Inizia \textbf{sempre} i file .nft con \texttt{flush ruleset} per svuotare la memoria del firewall ed evitare sovrapposizioni.
+	\end{nota}
+	\textbf{Struttura base del file (es. \texttt{client.nft})}:
 	\begin{lstlisting}[language=bash]
 		flush ruleset
 		
 		table ip filter {
 			chain input {
-				type filter hook input priority 0; policy drop;
+				type filter hook input priority filter; policy drop;
 				# Regole qui
 			}
 			chain forward {
-				type filter hook forward priority 0; policy drop;
+				type filter hook forward priority filter; policy drop;
 				# Regole qui
 			}
 			chain output {
-				type filter hook output priority 0; policy accept;
+				type filter hook output priority filter; policy accept;
 				# Regole qui
 			}
 		}
 	\end{lstlisting}
 	
 	\section{Loopback e Conntrack}
+	
+	!!! Questa sezione non ha più senso per come è scritta: essendo il prof che detta i termini, non siamo sicuri di dover mettere nelle regole neanche il loopback!!!\\\\
 	
 	Se chiudi tutto con una policy \texttt{drop} in \texttt{input}, la tua macchina smetterà di funzionare correttamente. Queste due regole devono essere \textbf{sempre} inserite in cima alla tua catena \texttt{input}.
 	
@@ -1854,12 +2084,17 @@
 	\end{lstlisting}
 	
 	\subsection{Regola 2: Stateful Filtering (Connection Tracking)}
-	Se la tua macchina fa una richiesta legittima verso l'esterno, il server remoto risponderà. Se non hai una regola per far rientrare le risposte, la policy \texttt{drop} le scarterà. Usiamo il Connection Tracking (\texttt{ct state}) per riconoscere il traffico di ritorno:
+	Se la tua macchina fa una richiesta legittima verso l'esterno, il server remoto risponderà. Se non hai una regola per far rientrare le risposte, la policy \texttt{drop} le scarterà. Usiamo il Connection Tracking (\texttt{ct state}) per riconoscere il traffico di ritorno.
+	
+	\begin{nota}[Il falso mito di UDP]
+		Molti credono che, essendo UDP (es. DNS su porta 53) un protocollo \textit{connectionless} (senza stato), non si possa applicare il tracking. Falso! Il Connection Tracker di Linux (netfilter) crea dei \textbf{"pseudo-stati"} virtuali in memoria. Pertanto, puoi e \textbf{devi} usare \texttt{ct state established} per far rientrare le risposte UDP esattamente come faresti per il TCP!
+	\end{nota}
+	
 	\begin{lstlisting}[language=bash]
 		ct state established,related accept
 	\end{lstlisting}
 	\begin{itemize}
-		\item \texttt{established}: Traffico appartenente a una connessione bidirezionale già avviata da noi.
+		\item \texttt{established}: Traffico appartenente a una connessione TCP bidirezionale o a un "pseudo-stato" UDP già avviato da noi.
 		\item \texttt{related}: Traffico accessorio ma legato a connessioni note (es. messaggi d'errore ICMP).
 	\end{itemize}
 	
@@ -1874,6 +2109,19 @@
 		\item \textbf{Terminating}: Interrompono l'analisi della catena (\texttt{accept}, \texttt{drop}).
 		\item \textbf{Non-terminating}: Annotano un evento e passano alla regola successiva (\texttt{log}, \texttt{counter}). \textbf{Importante}: i contatori non sono impliciti; se vuoi contare quante volte una regola viene colpita, devi scrivere \texttt{counter} esplicitamente.
 	\end{itemize}
+	
+	\begin{nota}[Logica di Posizionamento e Scrittura Regole]
+		Negli esercizi d'esame devi sempre chiederti \textit{su quale host} va posizionata la regola:
+		\begin{itemize}
+			\item \textbf{Bidirezionalità:} Il traffico di rete è bidirezionale. Se scrivi una regola nella catena \texttt{input} per permettere la ricezione, devi prevedere la relativa regola in \texttt{output} affinché la macchina possa rispondere ai pacchetti.
+			\item \textbf{Copia/Incolla e Inversione:} Una volta scritte le due regole per una macchina (es. il client), puoi copiare il file e adattarlo per l'host diametralmente opposto (es. r1). Basterà spostare la condizione del \texttt{ct state} e scambiare le \texttt{d} (destination) in \texttt{s} (source) e viceversa.
+\item \textbf{Interfacce (Attenzione ai Tranelli!):} Il professore specifica quasi sempre da quale interfaccia passa il traffico. Ci sono due regole d'oro da non dimenticare:
+\begin{enumerate}
+	\item Usa \textbf{sempre} \texttt{ip a} sulle macchine (Client, Server, Router) prima di scrivere le regole. Le interfacce come \texttt{eth1} o \texttt{eth2} appartengono spesso al router, mentre i nodi finali potrebbero usare \texttt{eth0} o \texttt{ens33}. Non ipotizzare i nomi, verificali!
+	\item Usa rigorosamente \texttt{iif} (Input Interface) solo nelle catene \texttt{input} o \texttt{prerouting} (il pacchetto sta entrando, non può avere una \texttt{oif}) e usa \texttt{oif} (Output Interface) solo nelle catene \texttt{output} o \texttt{postrouting}.
+\end{enumerate}
+\end{itemize}
+\end{nota}
 	
 	\subsection{Sintassi per Match Comuni}
 	Consentire l'accesso al servizio SSH contando i pacchetti (\texttt{dport} = \textbf{D}estination \textbf{Port}):
@@ -1965,9 +2213,42 @@
 		oif "eth0" masquerade
 	\end{lstlisting}
 	
-	\begin{nota}[NOTA]
-		Il NAT traduce solo gli indirizzi, ma \textbf{non bypassa i filtri}. Se fai un DNAT verso il server interno \texttt{10.0.0.10} sulla porta \texttt{22}, ricordati che nella tabella \texttt{filter}, catena \texttt{forward}, devi avere una regola che consenta esplicitamente il passaggio di quel pacchetto verso \texttt{10.0.0.10}!
+	\begin{nota}[Mascheramento e Regole Simmetriche]
+		Se la traccia ti chiede che una connessione passi per un router e venga mascherata come se provenisse da esso:
+		\begin{itemize}
+			\item I router intermedi non trattano direttamente i pacchetti a livello applicativo: devi inserire le classiche 2 regole di inoltro nella tabella \texttt{filter}, catena \textbf{forward} (una per l'andata, una per il ritorno).
+			\item Successivamente, applicherai il mascheramento con un'unica regola nella catena \textbf{postrouting} della tabella \texttt{nat}. Usa \texttt{priority srcnat}.
+			\item \textbf{Eccezione NAT:} Le regole di NAT sono le UNICHE che non richiedono la scrittura esplicita di regole simmetriche di ritorno, in quanto il connection tracker (\texttt{ct}) interno al kernel le gestisce in automatico.
+		\end{itemize}
 	\end{nota}
+	
+	\begin{nota}[ATTENZIONE VITALE: Ordine tra NAT e Filtri Forward]
+		Il Port Forwarding (DNAT) traduce la destinazione \textbf{prima} del routing (in \texttt{prerouting}). Questo ha un'implicazione fondamentale che fa fallire molti esami:
+		
+		Se fai un DNAT per esporre il server interno \texttt{192.168.1.7} (mascherato pubblicamente magari con l'IP del router \texttt{130.136.1.1}), ricordati che nella tabella \texttt{filter}, catena \texttt{forward}, la regola di accettazione \textbf{deve puntare all'IP privato interno del server} (\texttt{192.168.1.7}) e \textbf{NON} a quello pubblico! Quando il pacchetto arriva alla catena \texttt{forward}, l'indirizzo di destinazione è già stato tradotto in quello privato.
+	\end{nota}
+	
+	\section{Esempi Pratici e Scenari d'Esame (Es. 15 Aprile)}
+	
+	Oltre a conoscere la sintassi, in esame dovrai risolvere casistiche specifiche. Di seguito due esempi tratti direttamente dai laboratori:
+	
+	\subsection{Scenario A: Port Forwarding su porta non standard}
+	\textbf{Obiettivo:} Il servizio SSH di \texttt{s2} deve essere raggiungibile solo dal \texttt{client}, che lo può raggiungere come se fosse esposto da \texttt{r2} sulla porta 222.\\\\
+	Questo scenario richiede una \textbf{DNAT} (Destination NAT) sul router intermedio \texttt{r2}. Il pacchetto originale ha come destinazione la porta 222 di \texttt{r2}; il router lo intercetta e cambia la destinazione sull'IP di \texttt{s2} e sulla porta standard 22.
+	\begin{lstlisting}[language=bash]
+		# Sul router r2: Tabella NAT, catena prerouting
+		tcp dport 222 dnat to $s2:22
+	\end{lstlisting}
+	\textit{Attenzione:} Non dimenticare che il NAT traduce l'indirizzo ma non bypassa i filtri. Dovrai prevedere anche una regola nella catena \textbf{forward} (tabella filter) di \texttt{r2} per far passare fisicamente il traffico modificato verso l'IP di \texttt{s2}.
+	
+	\subsection{Scenario B: Isolamento e Filtrazione Granulare}
+	\textbf{Obiettivo:} I servizi diversi da SSH su \texttt{s1} devono essere raggiungibili solo da \texttt{s2}, e viceversa. Il resto deve essere scartato.\\\\
+	Questa è la classica applicazione della regola \textit{"Default Deny"}. Imposti la policy generale di forwarding su \texttt{drop}, dopodiché escludi chirurgicamente la porta 22 (non permessa per questi servizi) e autorizzi il resto del traffico unicamente tra quei due indirizzi IP.
+	\begin{lstlisting}[language=bash]
+		# Sul router intermedio (tabella filter, catena forward)
+		ip saddr $s1 ip daddr $s2 tcp dport != 22 ct state new,established accept
+		ip saddr $s2 ip daddr $s1 tcp dport != 22 ct state new,established accept
+	\end{lstlisting}
 	
 	\chapter{Post Exploitation}
 	
@@ -2013,6 +2294,18 @@
 			rar2john file.rar > hash.txt
 		\end{lstlisting}
 	\end{itemize}
+	
+	\vspace{0.5cm}
+	\textbf{3. Cracking di Servizi di Rete (L'alternativa THC Hydra)}\\
+	Se l'obiettivo non è un file di hash locale, ma un servizio di rete vivo (es. login HTTP, SSH, FTP), oppure se l'esercizio richiede o suggerisce l'uso di \textbf{Hydra} al posto di John the Ripper, la logica è identica, ma i comandi diretti per il brute-forcing con dizionario sono i seguenti:
+	
+	\begin{lstlisting}[language=bash]
+		# Esempio contro servizio SSH conoscendo l'utente (es. admin)
+		hydra -l admin -P /usr/share/wordlists/rockyou.txt ssh://<IP_TARGET>
+		
+		# Esempio contro form web POST (richiede la sintassi specifica dei campi)
+		hydra -l admin -P /usr/share/wordlists/rockyou.txt <IP_TARGET> http-post-form "/login.php:user=^USER^&pass=^PASS^:F=Login Failed"
+	\end{lstlisting}
 	Ottenuto il file \texttt{hash.txt}, si procede al cracking con la sintassi standard:
 	\begin{lstlisting}[language=bash]
 		john --wordlist=<wordlist> hash.txt
