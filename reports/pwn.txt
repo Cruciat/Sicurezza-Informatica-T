@@ -1,0 +1,27 @@
+# REPORT ESERCIZIO BINARY EXPLOITATION
+## 1. Preparazione dell'Ambiente
+* Disabilitazione ASLR per permettere l'exploit a indirizzi di memoria statici: 
+  `sudo sh -c "echo 0 > /proc/sys/kernel/randomize_va_space"`
+* Assegnazione permessi di esecuzione: `chmod +x [NOME_BINARIO]`
+
+## 2. Ricognizione e Analisi Base (Bonus Password)
+* **Analisi Statica:** Lanciato il comando `strings [NOME_BINARIO]`. 
+  [Se applicabile: È stata individuata la stringa in chiaro "[PASSWORD]", che si è rivelata essere la password corretta].
+* **Analisi Dinamica (GDB):** Lanciato `info functions` in GDB per mappare la memoria. Sono emerse funzioni critiche:
+  * `[FUNZIONE_VULNERABILE]` (es. check)
+  * `[FUNZIONE_TARGET]` (es. reveal) all'indirizzo: [INDIRIZZO_TARGET]
+
+## 3. Ricerca della Vulnerabilità e Calcolo Offset
+Il programma riceve input non sanitizzato (vulnerabilità di Buffer Overflow causata presumibilmente da `strcpy` o `gets`).
+* Obiettivo: Dirottare il flusso di esecuzione sovrascrivendo l'EIP (Instruction Pointer) salvato nello stack per farlo saltare alla funzione target.
+* Metodo utilizzato: Bisezione (invio di pattern di input crescenti fino a causare un Segmentation Fault).
+* Risultato Offset: Inviando [ES. 44] byte di padding + 4 byte di test ("BBBB"), il debugger riporta un crash sull'indirizzo `0x42424242`. L'offset esatto è quindi [ES. 44] byte.
+[Vedi screenshot: overflow1_bisezione.png]
+
+## 4. Exploitation e Cattura della Flag
+* Costruzione del payload: [ES. 44 byte] di 'A' + indirizzo della funzione target formattato in Little-Endian.
+* Comando di exploit lanciato:
+  `./[NOME_BINARIO] $(perl -e 'print "A"x[OFFSET] . "\x[BYTE4]\x[BYTE3]\x[BYTE2]\x[BYTE1]"')`
+* **Risultato:** Il flusso è stato correttamente dirottato.
+* **FLAG OTTENUTA:** [INSERIRE FLAG QUI]
+[Vedi screenshot: overflow2_successo.png]

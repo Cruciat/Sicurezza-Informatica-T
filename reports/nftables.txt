@@ -1,0 +1,27 @@
+# REPORT ESERCIZIO NFTABLES
+## Analisi della Topologia e Scelte Progettuali
+* **Client**: Rete [SUBNET_CLIENT], Interfaccia [IFACE].
+* **Server**: IP [IP_SERVER], Interfaccia [IFACE].
+* **Router**: 
+  * Interfaccia Esterna ([IFACE_PUB]): [IP_PUBBLICO]
+  * Interfaccia Interna Client ([IFACE_CLI]): [IP_GW_CLIENT]
+  * Interfaccia Interna Server ([IFACE_SRV]): [IP_GW_SERVER]
+
+## Policy di Default
+Come da specifiche di sicurezza (Default Deny), è stata applicata la direttiva `policy drop;` su tutte le catene di `filter` (`input`, `forward`, `output`) su tutti gli host. Le catene di `nat` usano `policy accept;`.
+
+## Flussi Autorizzati e Risoluzione
+**1. Accesso da Internet al Server (HTTPS - TCP/443):**
+* **NAT (Router):** Necessario DNAT in `prerouting` per mappare l'IP pubblico verso l'IP privato del server sulla porta 443.
+* **Forward (Router):** Autorizzato l'inoltro verso il server (IP post-traduzione) su TCP/443, e relativa risposta in `established`.
+* **Server:** Accettato in `input` il traffico TCP/443 e permessa l'uscita in `output` in `established`.
+
+**2. Accesso dei Client a Internet (DNS - UDP/53):**
+* **NAT (Router):** Necessario SNAT (Masquerade) in `postrouting` per mascherare la subnet privata dei client verso l'esterno.
+* **Forward (Router):** Autorizzato l'inoltro in uscita per la `dport 53` e permessa la risposta in `established`.
+* **Client:** Permessa in `output` l'uscita verso `dport 53` (UDP) e accettato il ritorno in `input` in `established` (sfruttando il tracking degli pseudo-stati UDP del kernel Linux).
+
+## Verifiche effettuate
+* I flussi non dichiarati vengono regolarmente scartati (Drop).
+* Le interfacce di loopback (lo) sono state esplicitamente autorizzate su tutti i nodi.
+* (Eventuale: rilevato ping non autorizzato da parte della macchina X, regolarmente droppato dai counter).

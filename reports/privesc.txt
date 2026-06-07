@@ -1,0 +1,31 @@
+# REPORT ESERCIZIO PRIVESC
+## Fase 1: Inizializzazione Integrity Check (AIDE)
+1.  Modifica del file di configurazione `/etc/aide/aide.conf` per aggiungere il monitoraggio aggressivo:
+    /usr/bin f Full
+    /etc f Full
+2.  Inizializzazione del database: `sudo aideinit --config /etc/aide/aide.conf`
+3.  Attivazione del database: `sudo cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db`
+4.  Test a vuoto: `sudo aide --check --config /etc/aide/aide.conf` (Nessuna differenza rilevata).
+
+## Fase 2: Installazione Pacchetto e Analisi
+1.  Decifratura del pacchetto: `gpg -d [NOME_PACCHETTO.deb.gpg] > pacchetto.deb`
+2.  Installazione: `sudo dpkg -i pacchetto.deb`
+3.  Nuovo controllo integrità: `sudo aide --check --config /etc/aide/aide.conf`
+
+### Risultati Analisi (Anomalie Rilevate):
+* [FILE_1]: 
+* [FILE_2]: 
+* [VICOLO CIECO 1 - Es. Directory SGID]: Segnalo presenza di..., ma risulta inefficace perché...
+* [VICOLO CIECO 2 - Es. ACL senza SUID]: Segnalo presenza di..., ma risulta inefficace perché...
+
+## Fase 3: Privilege Escalation
+### Vettore Iniziale (Accesso Utente Basso Privilegio):
+* Come ho ottenuto l'accesso (Es. trovato file chiave SSH): 
+* Comandi usati: `chmod 400 [CHIAVE]` -> `ssh -i [CHIAVE] [UTENTE]@localhost`
+
+### Vettore Finale (Da Utente a Root):
+* Vulnerabilità sfruttata (Es. Binario SUID, Capability, Cronjob): 
+* Comando/Modifica effettuata (Es. modifica /etc/passwd rimuovendo la 'x'): 
+* Ottenimento root: `su -` (o esecuzione shell).
+
+[VEDI SCREENSHOT ALLEGATI: privesc_1.png, privesc_2.png, privesc_3.png]
