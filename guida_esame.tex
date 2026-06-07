@@ -1786,33 +1786,117 @@
 		\end{enumerate}
 	\end{nota}
 	
-	\section{Cattura e Analisi Pratica del Traffico}
-	Prima di poter scrivere una regola, devi eseguire l'attacco, intercettarlo e ispezionarlo per capire quale sia la sua esatta "firma".
+	\section{Metodologia di Analisi PCAP con Wireshark}
+	Prima di poter scrivere una regola su Suricata, devi intercettare l'attacco e ispezionarlo per capirne l'esatta "firma". 
 	
-	\subsection{Step 1: Registrazione del traffico con tcpdump}
-	Avvia la registrazione dei pacchetti grezzi e salvali in un file \texttt{.pcap}:
+	\subsection*{Fase Preliminare: Registrazione del traffico con tcpdump}
+	Se non ti viene fornito un file PCAP pronto, avvia la registrazione dei pacchetti grezzi e salvali in un file \texttt{.pcap}:
 	\begin{lstlisting}[language=bash]
 		sudo tcpdump -i eth0 -w /tmp/attacco.pcap
 	\end{lstlisting}
-	Non è detto che la scheda di rete in ascolto si chiami \texttt{eth0}.
 	\begin{nota}[Workflow di Interruzione]
-		Lancia il comando, esegui immediatamente lo script o l'azione d'attacco e, non appena questo va a segno, torna nel terminale e premi \textbf{\texttt{Ctrl+C}} per stoppare tcpdump. Questo evita di inquinare il file \texttt{.pcap} con gigabyte di traffico di rete inutile.
+		Lancia il comando, esegui immediatamente lo script o l'azione d'attacco e, non appena questo va a segno, torna nel terminale e premi \textbf{\texttt{Ctrl+C}} per stoppare tcpdump. Questo evita di inquinare il file \texttt{.pcap} con traffico di rete inutile.
 	\end{nota}
 	
-	\subsection{Step 2: Ispezione della firma con Wireshark}
-	Una volta ottenuto il file \texttt{.pcap}, lo si analizza graficamente tramite Wireshark per isolare il pattern malevolo:
-	\begin{enumerate}
-		\item Apri il file digitando: \texttt{wireshark /tmp/attacco.pcap}
-		\item Individua un pacchetto indirizzato al server bersaglio, fai clic col tasto destro su di esso e seleziona \textbf{\texttt{Follow}} $\rightarrow$ \textbf{\texttt{TCP Stream}} (o HTTP Stream).
-		\item Si aprirà una finestra testuale con l'intera conversazione: i dati in input inviati dall'attaccante in \textbf{rosso}, e le risposte del server in \textbf{blu}.
-	\end{enumerate}
-	L'obiettivo è guardare il testo in rosso ed estrarre la stringa o i byte unici che caratterizzano la vulnerabilità sfruttata.
+	\subsection{STEP 1: Mappatura della rete fisica}
+	L'obiettivo è individuare i dispositivi reali, associarli ai loro IP e, in caso di reti multiple, identificare con certezza i router.
 	
-	\subsection{Metodologia di Analisi e Ricognizione Rete}
-	Il modo migliore per iniziare l'esercizio non è aprire subito Suricata, ma studiare la traccia su Wireshark ordinando e filtrando il traffico per protocollo per mappare la rete:
+	\begin{enumerate}
+		\item \textbf{Trovare i MAC Address attivi:}
+		\begin{itemize}
+			\item Vai su \texttt{Statistics} $\rightarrow$ \texttt{Endpoints} $\rightarrow$ Tab \texttt{Ethernet}.
+			\item Segnati su un blocco note tutti i MAC address presenti.
+		\end{itemize}
+		\item \textbf{Associare i MAC agli IP (Tramite ARP):}
+		\begin{itemize}
+			\item Applica il filtro: \texttt{eth.addr == <MAC\_ADDRESS> \&\& arp}
+			\item Cerca i pacchetti del tipo \textit{"IP X is at MAC Y"}. Seleziona preferibilmente le risposte (Reply) o le richieste in cui l'host dichiara chi è. 
+			\item Scrivi sul blocco note: \texttt{MAC\_A = IP\_X}.
+		\end{itemize}
+		\item \textbf{Identificazione dei Router:}
+		Per capire in modo logico e certo chi funge da router/gateway, usa uno di questi tre segnali nel traffico:
+		\begin{itemize}
+			\item \textbf{Traffico DNS:} Filtra per \texttt{udp.port == 53}. Se un IP interno risponde alle query DNS (DNS Response) di altri host locali, spesso quel nodo fa da gateway/forwarder.
+			\item \textbf{Traffico verso l'esterno:} Trova una conversazione tra un IP locale e un IP pubblico. Guarda il livello Ethernet di quel pacchetto: il MAC address di destinazione per uscire dalla rete locale è matematicamente quello del router.
+			\item \textbf{DHCP (se presente):} Filtra per \texttt{bootp.option.type == 3}. Questo pacchetto contiene esplicitamente l'indirizzo IP del "Router" assegnato alla rete.
+		\end{itemize}
+	\end{enumerate}
+	
+	\subsection{STEP 2: Mappatura globale del traffico (Per ogni Host)}
+	L'obiettivo è capire a grandi linee cosa sta facendo ogni IP individuato nello Step 1, iterando protocollo per protocollo.
+	Per ogni host trovato:
+	
+	\begin{enumerate}
+		\item \textbf{Traffico ARP:} \texttt{eth.src == <MAC\_ADDRESS> \&\& arp} 
+		\begin{itemize}
+			\item \textit{Cosa segnare:} Fa richieste per trovare un IP specifico o fa richieste a tappeto?
+		\end{itemize}
+		\item \textbf{Traffico ICMP:} \texttt{ip.addr == <IP\_HOST> \&\& icmp}
+		\begin{itemize}
+			\item \textit{Cosa segnare:} Invia Ping (Request) o risponde (Reply)? Verso quali IP?
+		\end{itemize}
+		\item \textbf{Traffico UDP (Es. DNS):} \texttt{ip.addr == <IP\_HOST> \&\& udp}
+		\begin{itemize}
+			\item \textit{Cosa segnare:} Sono normali query DNS? Segna la direzione.
+		\end{itemize}
+		\item \textbf{Traffico TCP:} \texttt{ip.addr == <IP\_HOST> \&\& tcp}
+		\begin{itemize}
+			\item \textit{Cosa segnare:} Quanti pacchetti sono? Sono flussi stabiliti o solo "coppie" di \texttt{SYN} seguiti da \texttt{RST, ACK} (tentativi falliti)?
+			\item \textit{Tip per velocizzare:} Con il filtro attivo, apri \texttt{Statistics} $\rightarrow$ \texttt{Endpoints} $\rightarrow$ spunta \textbf{"Limit to display filter"} per vedere immediatamente con quali altri IP sta parlando via TCP.
+		\end{itemize}
+		\item \textbf{Traffico HTTP:} \texttt{ip.addr == <IP\_HOST> \&\& http}
+		\begin{itemize}
+			\item \textit{Cosa segnare:} Chi è il client (chi fa la GET/POST) e chi è il server web?
+		\end{itemize}
+		\item \textbf{Traffico Rimanente:} \texttt{ip.addr == <IP\_HOST> \&\& !(arp || icmp || http || dns)}
+		\begin{itemize}
+			\item \textit{Cosa segnare:} Ci sono pacchetti strani o protocolli non standard?
+		\end{itemize}
+	\end{enumerate}
+	\textit{Risultato di questa fase:} Un elenco per ogni host con scritto, ad esempio: \textit{"Host B: X pacchetti TCP verso Host C (tutti SYN/RST), Y query DNS verso Host A"}.
+	
+	\subsection{STEP 3: Individuazione del traffico malevolo\textbf{}}
+	Ora si separa il traffico legittimo (rumore di fondo) dagli attacchi veri e propri, analizzando i payload o i pattern di scansione.
+	
+	\subsubsection{A. Riconoscere la fase di Reconnaissance (Scanning)}
+	Gli scan servono all'attaccante per mappare la rete (trovare host vivi e porte aperte).
 	\begin{itemize}
-		\item \textbf{Filtri \texttt{http, icmp, smtp, dhcp, dns}:} Permettono di osservare le comunicazioni standard e isolare quali indirizzi IP fanno traffico normale e lecito (es. individuare il Gateway o il DNS server).
-		\item \textbf{Filtro \texttt{arp}:} Essenziale se si sospetta un ARP Spoofing / Man-in-the-Middle. Cerca la presenza massiva di \textit{Risposte Spontanee} (Gratuitous ARP) non sollecitate. Confrontando i MAC address di questi pacchetti con il traffico legittimo studiato in precedenza, potrai isolare con certezza l'IP e il MAC dell'attaccante.
+		\item \textbf{ARP Scanning:} Un host invia richieste ARP a tappeto e in modo sequenziale verso tutti gli IP di una subnet per vedere chi risponde.
+		\begin{nota}[ATTENZIONE: La Trappola dei Router]
+			Se l'host che sta facendo l'ARP scan è un router (identificato in modo certo allo Step 1), \textbf{NON è lui l'attaccante}. Sta semplicemente cercando di recapitare i pacchetti di un IP/Port scan proveniente da un attaccante situato in un'altra sottorete. L'attaccante vero è l'IP sorgente dei pacchetti che il router sta smistando.
+		\end{nota}
+		\item \textbf{IP/ICMP Sweep:} Un host invia pacchetti ICMP Echo Request sequenzialmente a tutti gli IP di una subnet.
+		\item \textbf{TCP Port Scan:} Un IP invia pacchetti \texttt{TCP SYN} verso migliaia di porte diverse di un singolo IP bersaglio. Il bersaglio risponderà con \texttt{TCP RST, ACK} sulle porte chiuse.
+		\begin{itemize}
+			\item \textit{Nota per l'esame:} In assenza di altri attacchi, una regola Suricata per bloccare questo comportamento consiste nel droppare tutto il traffico proveniente dall'IP sorgente individuato nello scan.
+		\end{itemize}
+	\end{itemize}
+	
+	\subsubsection{B. Riconoscere Attacchi Web (HTTP)}
+	Usa il filtro \texttt{http.request}.
+	\begin{itemize}
+		\item \textbf{Cosa guardare:}
+		\begin{enumerate}
+			\item \textbf{URL (URI):} Cerca stringhe codificate, tentativi di directory traversal (\texttt{../}) o iniezioni di comandi (\texttt{\%26\%20cat}, \texttt{\& ls}, \texttt{|| id}).
+			\item \textbf{User-Agent:} Cerca anomalie. Se al posto di "Mozilla" vedi \texttt{curl}, \texttt{nmap} o \texttt{python-requests}, è un tool automatizzato/script.
+		\end{enumerate}
+		\item \textbf{Ispezione:} Tasto destro sul pacchetto sospetto $\rightarrow$ \textbf{Follow} $\rightarrow$ \textbf{HTTP Stream}. 
+		\begin{itemize}
+			\item Se nel testo della risposta (in blu) vedi l'output del comando (es. la lista del file \texttt{/etc/passwd}), l'attacco ha avuto successo.
+		\end{itemize}
+	\end{itemize}
+	
+	\subsubsection{C. Riconoscere Exploit Binari / Custom (TCP)}
+	Cerca le conversazioni TCP più "pesanti" in termini di Byte verso porte non standard (es. 8000).
+	\begin{itemize}
+		\item \textbf{Ispezione:} Tasto destro sul pacchetto $\rightarrow$ \textbf{Follow} $\rightarrow$ \textbf{TCP Stream}.
+		\item \textbf{Cosa guardare:} Cambia la visualizzazione in \textbf{Hex Dump} (in basso). Cerca sequenze di NOP (\texttt{\textbackslash x90\textbackslash x90}) o specifici indirizzi di ritorno esadecimali corrotti (es. \texttt{b9 61 55 56}). Se dopo l'esadecimale vedi l'attaccante lanciare comandi shell (\texttt{ls}, \texttt{whoami}), hai trovato un Buffer Overflow.
+	\end{itemize}
+	
+	\subsubsection{D. Riconoscere Attacchi di Rete (Livello 2/7)}
+	\begin{itemize}
+		\item \textbf{ARP Spoofing (MITM):} Filtra per \texttt{arp}. Se vedi un host che inizia a inviare continue "ARP Reply" non richieste, dicendo \textit{"L'IP del Gateway si trova al mio MAC address"}, sta avvelenando le cache per mettersi in mezzo alla comunicazione.
+		\item \textbf{DNS (C2 / Tunneling):} Se vedi richieste DNS insolitamente lunghe (stringhe in Base64) o domini palesemente generati casualmente (es. \texttt{x8f9q2.com}), potrebbe essere un malware che comunica col suo Command \& Control (C2) o che esfiltra dati mascherandoli da traffico DNS.
 	\end{itemize}
 	
 	\section{Componenti e Sintassi delle Regole Suricata}
@@ -1833,6 +1917,14 @@
 			\item \textbf{\texttt{<>}} (Bidirezionale): Ispeziona i pacchetti di andata e di ritorno di quel flusso.
 		\end{itemize}
 	\end{itemize}
+	
+	\begin{nota}[Bloccare tutto il traffico: Il protocollo "ip" vs "any"]
+		A differenza dei campi relativi a IP e Porte, \textbf{non esiste la keyword \texttt{any} per il protocollo}. Se la traccia dell'esercizio richiede di "bloccare tutto il traffico" proveniente da un host malevolo, il protocollo corretto da usare nell'intestazione è \textbf{\texttt{ip}}.
+		
+		Usare \texttt{ip} crea una regola "pigliatutto" che racchiude automaticamente al suo interno l'intero traffico di Layer 3 e superiori (inclusi \texttt{tcp}, \texttt{udp}, \texttt{icmp} e tutti i protocolli applicativi come \texttt{http} o \texttt{dns}). 
+		
+		L'unica eccezione tecnica è l'\textbf{ARP}, in quanto protocollo di Layer 2. Tuttavia, oltre al fatto che Suricata non è in grado di operare nativamente su Layer 2, la cosa è ininfluente: se blocchi tutto il traffico \texttt{ip} di un host, l'attaccante potrà al massimo limitarsi a fare un rumoroso ma innocuo ARP Scanning sulla rete locale, ma gli sarà fisicamente impossibile stabilire qualsiasi tipo di connessione o lanciare exploit contro i servizi.
+	\end{nota}
 	
 	\subsection{Le Opzioni principali}
 	\begin{itemize}
