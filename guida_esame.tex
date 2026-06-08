@@ -2163,17 +2163,71 @@
 		}
 	\end{lstlisting}
 	
-	\section{Loopback e Conntrack}
-	
-	!!! Questa sezione non ha più senso per come è scritta: essendo il prof che detta i termini, non siamo sicuri di dover mettere nelle regole neanche il loopback!!!\\\\
-	
-	Se chiudi tutto con una policy \texttt{drop} in \texttt{input}, la tua macchina smetterà di funzionare correttamente. Queste due regole devono essere \textbf{sempre} inserite in cima alla tua catena \texttt{input}.
-	
-	\subsection{Regola 1: Il Loopback}
-	Il sistema operativo usa l'interfaccia \texttt{lo} (127.0.0.1) per far comunicare i processi interni tra loro. Va sempre autorizzata. (\texttt{iif} significa \textbf{I}nput \textbf{I}nterface).
-	\begin{lstlisting}[language=bash]
-		iif "lo" accept
-	\end{lstlisting}
+\section{Cheat Sheet: Anatomia di una Regola e Porte}
+
+Una regola \texttt{nftables} si costruisce leggendola da sinistra a destra, procedendo dal livello fisico (interfacce) fino al livello applicativo (porte), secondo questa struttura rigorosa:
+
+\begin{center}
+	\texttt{[Interfaccia] + [Famiglia L3] + [Protocollo L4] + [Porta] + [Stato] + [Verdetto]}
+\end{center}
+
+\begin{itemize}
+	\item \textbf{Famiglia L3 (\texttt{ip} o \texttt{ip6}):} Parola chiave \textbf{obbligatoria} prima di indicare indirizzi IP sorgente (\texttt{saddr}) o destinazione (\texttt{daddr}).
+	\item \textbf{Protocollo L4 (\texttt{tcp} o \texttt{udp}):} Parola chiave \textbf{obbligatoria} prima di indicare porte sorgente (\texttt{sport}) o destinazione (\texttt{dport}).
+\end{itemize}
+
+\textit{Esempio di costruzione:} Traffico in ingresso da eth1, diretto all'IP 10.0.0.1, protocollo TCP, verso la porta web, già stabilito:
+\begin{lstlisting}[language=bash]
+	iif eth1 ip daddr 10.0.0.1 tcp dport 80 ct state established accept
+\end{lstlisting}
+
+\subsection{Porte Comuni da Esame}
+Le porte non vengono fornite nella traccia, devono essere conosciute a memoria:
+
+\begin{table}[h!]
+	\centering
+	\begin{tabular}{|l|c|l|}
+		\hline
+		\textbf{Servizio} & \textbf{Protocollo} & \textbf{Porta} \\ \hline
+		\textbf{HTTP} (Web in chiaro) & \texttt{tcp} & \texttt{80} \\ \hline
+		\textbf{HTTPS} (Web cifrato) & \texttt{tcp} & \texttt{443} \\ \hline
+		\textbf{DNS} (Risoluzione Nomi) & \textbf{\texttt{udp}} & \texttt{53} \\ \hline
+		\textbf{SSH} (Amministrazione) & \texttt{tcp} & \texttt{22} \\ \hline
+		\textbf{PostgreSQL} (Database) & \texttt{tcp} & \texttt{5432} \\ \hline
+		\textbf{MySQL / MariaDB} (Database) & \texttt{tcp} & \texttt{3306} \\ \hline
+	\end{tabular}
+\end{table}
+
+\section{La Regola d'Oro delle Interfacce (iif / oif)}
+
+Nei testi d'esame il professore indica sempre attraverso quale interfaccia deve transitare il traffico. Usare il selettore sbagliato nella catena sbagliata genera un \textbf{errore di sintassi immediato} bloccando il firewall.
+
+\begin{table}[h!]
+	\centering
+	\begin{tabular}{|p{3cm}|p{2cm}|p{2cm}|p{7cm}|}
+		\hline
+		\textbf{Catena} & \textbf{Usa \texttt{iif}?} & \textbf{Usa \texttt{oif}?} & \textbf{Motivazione} \\ \hline
+		\texttt{input} & \textbf{SI} & NO & Il pacchetto è destinato a noi, l'interfaccia di uscita non esiste. \\ \hline
+		\texttt{output} & NO & \textbf{SI} & Il pacchetto viene generato da noi, l'interfaccia di ingresso non esiste. \\ \hline
+		\texttt{forward} & \textbf{SI} & \textbf{SI} & Il pacchetto attraversa il router. Si usano \textbf{entrambe} accoppiate (es. \texttt{iif eth1 oif eth2}). \\ \hline
+		\texttt{prerouting} (DNAT) & \textbf{SI} & NO & Il routing non è ancora avvenuto, il kernel non sa da dove uscirà il pacchetto. \\ \hline
+		\texttt{postrouting} (SNAT) & NO & \textbf{SI} & Il pacchetto è già stato instradato e sta per uscire, l'interfaccia di origine è irrilevante. \\ \hline
+	\end{tabular}
+\end{table}
+
+\section{Regole Fondamentali: Loopback e Conntrack}
+
+\subsection{Regola 1: Il Loopback (Sempre Necessario sugli Endpoint)}
+Se imposti una \texttt{policy drop} su una macchina endpoint (Client o Server), blocchi anche il traffico di \texttt{loopback} (127.0.0.1). Il sistema operativo e i processi interni (es. database locale che parla col webserver locale) smetteranno di funzionare o genereranno errori anomali.
+\begin{nota}[Quando metterlo]
+	Va messo \textbf{sempre} nelle catene \texttt{input} e \texttt{output} degli endpoint. Sul router è meno vitale se fa solo \texttt{forward}, ma è \textit{best practice} inserirlo ovunque.
+\end{nota}
+\begin{lstlisting}[language=bash]
+	# In input
+	iif "lo" accept
+	# In output
+	oif "lo" accept
+\end{lstlisting}
 	
 	\subsection{Regola 2: Stateful Filtering (Connection Tracking)}
 	Se la tua macchina fa una richiesta legittima verso l'esterno, il server remoto risponderà. Se non hai una regola per far rientrare le risposte, la policy \texttt{drop} le scarterà. Usiamo il Connection Tracking (\texttt{ct state}) per riconoscere il traffico di ritorno.
@@ -2193,6 +2247,27 @@
 	\begin{nota}[NOTA SULLA SICUREZZA]
 		Se stai proteggendo un Endpoint (Client o Server) e non un Router, la sua catena \texttt{forward} \textbf{deve avere policy \texttt{drop}}. Gli endpoint non devono mai inoltrare traffico per conto di terzi.
 	\end{nota}
+	
+	\subsection{La Regola Complementare (Tabella Filter)}
+	Nella tabella \texttt{filter}, se la policy è \texttt{drop}, ogni comunicazione richiede \textbf{sempre due regole}: una per chi inizia la connessione e una per la risposta.
+	
+	\textbf{Scenario: Webserver interno fa query DNS verso Internet.}
+	\begin{enumerate}
+		\item \textbf{L'Andata (Inizializzazione):} Usa lo stato \texttt{new} (o ometti lo stato). Definisci la porta di destinazione (\texttt{dport}).
+		\begin{lstlisting}[language=bash]
+			# Webserver (Output): Esco verso Internet
+			oif eth1 udp dport 53 accept
+			# Router (Forward): Da LAN a WAN
+			iif eth1 oif eth2 udp dport 53 accept
+		\end{lstlisting}
+		\item \textbf{Il Ritorno (Complementare):} \textbf{Devi} invertire le interfacce, usare \texttt{sport} invece di \texttt{dport}, e aggiungere tassativamente \texttt{ct state established}.
+		\begin{lstlisting}[language=bash]
+			# Router (Forward): Da WAN a LAN, risposta DNS
+			iif eth2 oif eth1 udp sport 53 ct state established accept
+			# Webserver (Input): Rientro dal router
+			iif eth1 udp sport 53 ct state established accept
+		\end{lstlisting}
+	\end{enumerate}
 	
 	\section{Match e Verdict}
 	
@@ -2286,6 +2361,15 @@
 			}
 		}
 	\end{lstlisting}
+	
+	\begin{nota}[Il NAT ha "memoria": Nessuna regola complementare]
+		A differenza della tabella \texttt{filter} (dove devi autorizzare l'andata e usare \texttt{ct state established} per autorizzare esplicitamente il ritorno), la tabella \texttt{nat} viene attraversata \textbf{SOLO dal primo pacchetto} di una nuova connessione. 
+		Da quel momento in poi, il motore di tracciamento (conntrack) prende in carico la traduzione in modo automatico. 
+		\begin{itemize}
+			\item Se scrivi una regola di DNAT per il traffico in ingresso, \textbf{NON serve} scrivere una regola SNAT per la risposta.
+			\item Se scrivi una regola di SNAT per il traffico in uscita, \textbf{NON serve} scrivere una regola DNAT per la risposta.
+		\end{itemize}
+	\end{nota}
 	
 	\subsection{DNAT (Destination NAT / Port Forwarding)}
 	Si applica nel \texttt{prerouting}. Modifica l'IP di destinazione. Serve per esporre su Internet un servizio che in realtà si trova in una rete privata nascosta.\\
