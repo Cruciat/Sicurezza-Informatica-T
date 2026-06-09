@@ -1,0 +1,1 @@
+[azione] [protocollo] [IP_sorgente] [porta_sorgente] -> [IP_destinazione] [porta_destinazione] (msg:"[testo_allerta]"; content:"[stringa_o_pattern]"; classtype:[categoria]; sid:[numero_id]; rev:[versione];)

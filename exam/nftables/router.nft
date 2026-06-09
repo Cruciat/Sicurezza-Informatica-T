@@ -24,7 +24,6 @@ table ip filter {
 }
 
 
-# DA CAPIRE MEGLIO
 table ip nat {
     chain prerouting {
         type nat hook prerouting priority dstnat; policy accept;
