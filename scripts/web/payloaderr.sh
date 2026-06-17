@@ -172,7 +172,6 @@ generate_encodings() {
     printf '%s\x1f%s\n' "$(url_encode        "$input")" "URL Encoding"
     printf '%s\x1f%s\n' "$(double_url_encode "$input")" "Double URL Encoding"
     printf '%s\x1f%s\n' "$(base64_encode     "$input")" "Base64 Encoding"
-    printf '%s\x1f%s\n' "$(hex_encode        "$input")" "Hex Encoding (SQLi 0x...)"
 }
 
 # ------------------------------ LFI Module ---------------------------------
@@ -325,7 +324,6 @@ ${B}MODULO ENCODING — codifiche (-t e o -t oe)${R}
      1  URL Encoding            %3B%20id
      2  Double URL Encoding     %253B%2520id
      3  Base64                  OyBpZA==
-     4  Hex SQLi (0x...)        0x3b206964
 
 ${B}MODULO CMD (-v cmd)${R}
 
@@ -525,10 +523,10 @@ if [[ -n "$VULN" ]]; then
         cmd)  _run_cmd  "$PAYLOAD" ;;
         lfi)  _run_lfi  "$PAYLOAD" ;;
         sqli)
-            while IFS=$'\x1f' read -r p d; do
-                [[ -z "$p" ]] && continue
-                print_payload "$p" "$d"
-            done < <(generate_encodings "$PAYLOAD")
+            # Per le SQLi intere (es. "' OR 1=1 --"), applichiamo solo gli URL encoding.
+            # L'hex encoding distruggerebbe la sintassi SQL.
+            printf '%s\x1f%s\n' "$(url_encode        "$PAYLOAD")" "URL Encoding" | while IFS=$'\x1f' read -r p d; do print_payload "$p" "$d"; done
+            printf '%s\x1f%s\n' "$(double_url_encode "$PAYLOAD")" "Double URL Encoding" | while IFS=$'\x1f' read -r p d; do print_payload "$p" "$d"; done
             ;;
     esac
 else

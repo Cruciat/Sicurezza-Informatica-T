@@ -166,50 +166,6 @@
 		Sebbene lo script esegua questi passaggi in automatico, la profonda comprensione dei comandi nativi appena descritti resta fondamentale qualora l'automazione fallisse, l'ambiente filtrasse certi pacchetti o si rendesse necessario un troubleshooting manuale mirato.
 	\end{nota}
 	
-	\section{Web Directory Discovery (Gobuster)}
-	
-	Qualora l'enumerazione (via Nmap) riveli l'esposizione di un web server, è imperativo cercare cartelle, pannelli di amministrazione o file sensibili che non sono direttamente linkati nelle pagine pubbliche. Spesso queste risorse nascoste espongono vulnerabilità o rivelano il codice sorgente del backend.
-	
-	Il metodo qui consiste nel far passare a un tool automatico una Wordlist contenente nomi di percorsi comuni. Il comando operativo con Gobuster è:
-	
-	\begin{lstlisting}[language=bash]
-		gobuster dir -u <url> -w /usr/share/seclists/Discovery/Web-Content/big.txt
-	\end{lstlisting}
-	
-	\textbf{Spiegazione dei parametri:}\\
-	\begin{itemize}
-		\item \texttt{dir}: Specifica a Gobuster di operare nella modalità di enumerazione directory/file.
-		\item \texttt{-u <url>}: Definisce l'URL del bersaglio.
-		\item \texttt{-w}: Indica il percorso del dizionario da utilizzare. La lista \texttt{big.txt} preinstallata su Parrot tramite il pacchetto SecLists è uno standard eccellente per l'ambiente di laboratorio.
-	\end{itemize}
-	
-	\section{OSINT e Subdomain Enumeration}
-	
-	In scenari più ampi, il target potrebbe non limitarsi all'indirizzo principale, ma presentare sottodomini nascosti (virtual host) che ospitano applicazioni di test o vecchie versioni meno sicure. Inoltre, la fase di reconnaissance include la generazione di dizionari su misura per attacchi successivi di password cracking o brute-forcing.
-	
-	\textbf{Mappatura dei Sottodomini (dnsmap)}\\
-	Come visto nei laboratori, per mappare l'infrastruttura DNS e scoprire ulteriori domini legati al bersaglio, si utilizza:
-	
-	\begin{lstlisting}[language=bash]
-		dnsmap <dominio>
-	\end{lstlisting}
-	
-	Questo tool eseguirà un bruteforce cercando corrispondenze valide per svelare eventuali sottodomini operativi (es. \texttt{dev.target.local}).
-	
-	\textbf{Generazione Wordlist Mirate (cewl)}\\
-	Se i dizionari generici risultano inefficaci per il brute-forcing delle credenziali, la strategia vincente è creare una wordlist customizzata estrapolando le parole chiave direttamente dai testi presenti sulle pagine web del bersaglio.
-	
-	\begin{lstlisting}[language=bash]
-		cewl -d 1 -m 5 <url> -w wordlist.txt
-	\end{lstlisting}
-	
-	\textbf{Spiegazione dei parametri:}\\
-	\begin{itemize}
-		\item \texttt{-d 1}: Imposta la profondità (Depth) dello spidering. A \texttt{1}, \texttt{cewl} analizzerà solo la pagina specificata senza seguire i link interni.
-		\item \texttt{-m 5}: Imposta la lunghezza minima (Minimum). Salverà solo le parole composte da almeno 5 caratteri, scremando articoli e preposizioni inutili.
-		\item \texttt{-w wordlist.txt}: L'output file dove verrà salvata la lista di parole pronta all'uso.
-	\end{itemize}
-	
 	\chapter{Web Security}
 	
 	\section{SQL Injection}
