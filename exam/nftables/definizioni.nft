@@ -1,4 +1,0 @@
-# Definizioni degli host
-define server = 10.1.1.1
-define client = 10.2.2.2
-define router = 10.0.0.254

@@ -1,0 +1,651 @@
+\documentclass[12pt, a4paper]{report}
+
+% Pacchetti fondamentali per lingua e codifica
+\usepackage[utf8]{inputenc}
+\usepackage[italian]{babel}
+\usepackage[T1]{fontenc}
+
+% Margini e geometria della pagina
+\usepackage{geometry}
+\geometry{a4paper, top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
+
+% Matematica
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+
+% Formattazione del codice e dei comandi
+\usepackage{listings}
+\usepackage{xcolor}
+
+% --- Personalizzazione Titoli ---
+\usepackage{titlesec}
+
+\usepackage{microtype}
+\sloppy
+
+% Formato: Capitolo X - Titolo (tutto su una riga)
+\titleformat{\chapter}[block]
+{\normalfont\huge\bfseries}{\chaptername\ \thechapter\ - }{0pt}{\huge}
+\titlespacing*{\chapter}{0pt}{-10pt}{20pt}
+
+% Colori per VERO/FALSO
+\definecolor{verdeanswer}{rgb}{0.0, 0.55, 0.0}
+\definecolor{rossoanswer}{rgb}{0.85, 0.0, 0.0}
+\definecolor{freqcolor}{rgb}{0.4, 0.4, 0.4}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+
+\lstdefinestyle{mystyle}{
+backgroundcolor=\color{backcolour},
+commentstyle=\color{codegreen},
+keywordstyle=\color{magenta},
+numberstyle=\tiny\color{codegray},
+stringstyle=\color{codepurple},
+basicstyle=\ttfamily\footnotesize,
+breakatwhitespace=false,
+breaklines=true,
+captionpos=b,
+keepspaces=true,
+numbers=left,
+numbersep=5pt,
+showspaces=false,
+showstringspaces=false,
+showtabs=false,
+tabsize=2
+}
+
+\lstset{style=mystyle}
+
+% Comandi utili per risposta e frequenza
+\newcommand{\vero}{\textcolor{verdeanswer}{\textbf{VERO}}}
+\newcommand{\falso}{\textcolor{rossoanswer}{\textbf{FALSO}}}
+\newcommand{\freq}[1]{\textcolor{freqcolor}{\textit{(freq.\ #1)}}}
+
+% Link e riferimenti cliccabili
+\usepackage{hyperref}
+\hypersetup{
+colorlinks=true,
+linkcolor=black,
+filecolor=magenta,
+urlcolor=cyan,
+pdftitle={Crocette di Sicurezza Informatica},
+pdfpagemode=FullScreen,
+}
+
+\begin{document}
+
+\title{\textbf{Crocette di Sicurezza Informatica}\\[0.5em]
+\large Raccolta di domande V/F da esami precedenti}
+\author{Cruciat Elia}
+\date{\today}
+
+\maketitle
+
+\tableofcontents
+\newpage
+
+% -------------------------------------------------------
+\chapter{Autenticazione e Controllo degli Accessi}
+% -------------------------------------------------------
+
+\section{Password e Salt}
+
+\noindent\textbf{1)} Il salt è una variazione random inserita dal sistema all'atto della memorizzazione della password scelta. $\to$ \vero{} \freq{3}
+
+\smallskip
+\noindent\textbf{66)} Il salt è una password aggiuntiva di secondo livello. $\to$ \falso{}
+
+\medskip
+\noindent Il salt è una variazione \textit{random} concatenata alla password prima dell'hashing, \textbf{non} un secondo segreto scelto dall'utente.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Challenge \& Response}
+
+\noindent\textbf{2)} I sistemi a sfida e risposta sono tipicamente implementati condividendo un segreto come ad esempio una chiave simmetrica. $\to$ \falso{} \freq{3}
+
+\medskip
+\noindent I sistemi a sfida e risposta utilizzano tipicamente la crittografia \textbf{asimmetrica}: la challenge è cifrata con la chiave pubblica del Prover, che la decifra con la propria chiave privata. La chiave simmetrica viene condivisa con altri meccanismi (es.\ Diffie-Hellman).
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Comandi Unix e Password}
+
+\noindent\textbf{3)} In Unix il comando \texttt{passwd} si usa per verificare la robustezza della password. $\to$ \falso{} \freq{2}
+
+\medskip
+\noindent Il comando \texttt{passwd} serve a \textbf{cambiare} la password di un utente, non a valutarne la robustezza.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Fattori di Autenticazione}
+
+\noindent\textbf{4)} Tra i fattori di autenticazione c'è qualcosa che si conosce (Password, PIN). $\to$ \vero{}
+
+\medskip
+\noindent\textbf{73)} Tra i fattori di autenticazione c'è qualcosa che si possiede fisicamente, come un Pin o una Password. $\to$ \falso{} \freq{2}
+
+\medskip
+\noindent Un pin o una password sono classificati come \textbf{qualcosa che si sa} (\textit{knowledge factor}), non come qualcosa che si possiede fisicamente. Il possesso fisico riguarda token hardware, smart card, YubiKey, ecc.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{FIDO Alliance e OTP}
+
+\noindent\textbf{5)} FIDO Alliance è un sistema di generazione degli OTP. $\to$ \falso{} \freq{2}
+
+\medskip
+\noindent La \textbf{FIDO Alliance} è un consorzio di aziende (Google, Microsoft, ecc.) che sviluppa \textit{standard aperti} per un'autenticazione più semplice e sicura, come U2F e UAF. Non ha nulla a che vedere con la generazione di OTP.
+
+\medskip
+\noindent\textbf{42)} Lo scopo del TOTP è quello di forzare l'utente a cambiare periodicamente la password. $\to$ \falso{}
+
+\medskip
+\noindent Con \textbf{TOTP} si intende la \textit{Time-based One-Time Password}: un token aggiuntivo valido per un solo utilizzo e con un breve limite temporale. Non ha alcuna relazione con il cambio periodico della password.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Autenticazione Attiva}
+
+\noindent\textbf{41)} Nell'autenticazione attiva Prover e Verifier si scambiano ogni volta un dato diverso. $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent Nell'autenticazione attiva il Prover dimostra il possesso del segreto senza mai trasmetterlo direttamente, inviando ogni sessione un valore diverso. Questo rende inutili gli attacchi di replay.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{2FA vs 2SA}
+
+\noindent\textbf{74)} 2FA e 2 step authentication sono esattamente la stessa cosa. $\to$ \falso{} \freq{2}
+
+\medskip
+\noindent Nel \textbf{2-Step Authentication} viene aggiunto un livello ulteriore ma non necessariamente di categoria diversa. Nel vero \textbf{2FA} i due fattori devono essere categorialmente distinti (es.\ qualcosa che si sa + qualcosa che si ha fisicamente).
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Controllo degli Accessi: Paradigmi}
+
+\noindent\textbf{6)} Il controllo dell'accesso è decidere se un soggetto può eseguire una specifica operazione su di un oggetto. $\to$ \vero{}
+
+\medskip
+\noindent\textbf{9)} I due paradigmi fondamentali per il controllo dell'accesso sono DAC (Discretionary Access Control) e TAC (Tertiary Access Control). $\to$ \falso{}
+
+\medskip
+\noindent I due paradigmi fondamentali sono:
+\begin{itemize}
+    \item \textbf{DAC (Discretionary Access Control):} ogni oggetto ha un proprietario che decide i permessi.
+    \item \textbf{MAC (Mandatory Access Control):} la proprietà di un oggetto non consente di modificarne i permessi; esiste una policy centralizzata gestita da un security manager.
+\end{itemize}
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{ACL e Capability List}
+
+\noindent\textbf{10)} Le capability list sono delle liste associate a ogni soggetto del sistema. $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent\textbf{43)} Le ACL sono liste associate ad ogni soggetto del sistema. $\to$ \falso{} \freq{3}
+
+\medskip
+\noindent\textbf{44)} Le ACL e le Capabilities sono la stessa cosa. $\to$ \falso{} \freq{2}
+
+\medskip
+\noindent Le \textbf{ACL} (Access Control List) sono associate a ogni \textit{risorsa/oggetto}, mentre le \textbf{Capability List} sono associate a ogni \textit{soggetto}. Sono strumenti complementari e diversi.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{RBAC}
+
+\noindent\textbf{76)} Nel modello RBAC (Role-based Access Control) i permessi sono assegnati ai ruoli. $\to$ \vero{}
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Permessi Unix e NTFS}
+
+\noindent\textbf{45)} I bit di autorizzazione standard nel filesystem Unix sono di 3 tipi R, W, X (read, write, execute). $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent\textbf{46)} Ogni permesso su di un file in NTFS può assumere due soli valori (concesso o negato). $\to$ \falso{} \freq{2}
+
+\medskip
+\noindent In NTFS ogni permesso può assumere tre valori: \textbf{allow}, \textbf{deny} o \textbf{non impostato}. La distinzione tra deny esplicito e non impostato è fondamentale per la risoluzione dei conflitti.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Bit SUID e SGID}
+
+\noindent\textbf{7)} Il comando \texttt{find / -type f -perm /6000} permette di trovare i file coi bit SUID e SGID impostati a 1. $\to$ \falso{}
+
+\medskip
+\noindent\textit{Nota:} questa domanda è controversa. Il comando nella sua forma attuale trova effettivamente i file con SUID o SGID impostati. La risposta corretta varia a seconda della versione dell'esame.
+
+\medskip
+\noindent\textbf{8)} Il SUID è il bit che permette di lanciare con sudo il programma su cui è settato. $\to$ \falso{} \freq{3}
+
+\medskip
+\noindent Il \textbf{SUID} fa eseguire il programma con i permessi dell'\textbf{owner del file}, non con \texttt{sudo}. Esempio classico: \texttt{/usr/bin/passwd} ha SUID impostato ed è di proprietà di root.
+
+% -------------------------------------------------------
+\chapter{Crittografia}
+% -------------------------------------------------------
+
+\section{Cifrari a Sostituzione e Frequenze}
+
+\noindent\textbf{13)} Nell'attacco dei cifrari a sostituzione il fatto che alcune lettere siano più frequenti di altri nel linguaggio naturale non ha nessuna importanza. $\to$ \falso{}
+
+\medskip
+\noindent La \textbf{frequenza delle lettere} è lo strumento principale per attaccare i cifrari monoalfabetici: le lettere più frequenti nel cifrato corrispondono alle lettere più frequenti nella lingua naturale.
+
+\medskip
+\noindent\textbf{14)} Nel cifrario con sostituzione monoalfabetica sull'alfabeto inglese lo spazio delle chiavi è grande $26!$. $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent Con 26 lettere, il numero di permutazioni possibili è $26! \approx 4 \times 10^{26}$, uno spazio enormemente grande ma comunque vulnerabile all'analisi delle frequenze.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Cifrari a Trasposizione}
+
+\noindent\textbf{11)} Nei cifrari a trasposizione le statistiche dei digrammi e trigrammi permettono di dedurre la dimensione della tabella di cifratura. $\to$ \vero{} \freq{3}
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Cifrari Polialfabetici}
+
+\noindent\textbf{47)} Nei cifrari a sostituzione polialfabetica conoscere il contenuto di una parte del messaggio non aiuta la decifrazione dell'intero testo. $\to$ \falso{} \freq{3}
+
+\medskip
+\noindent Anche nei cifrari polialfabetici la conoscenza parziale del testo aiuta, perché permette di individuare la \textbf{ripetizione periodica} delle sostituzioni e quindi di risalire alla lunghezza della chiave.
+
+\medskip
+\noindent\textbf{49)} Nei cifrari a sostituzione polialfabetica le frequenze di un carattere cifrato derivano da contributi di diversi caratteri in chiaro. $\to$ \vero{}
+
+\medskip
+\noindent Questo è esattamente il punto di forza dei cifrari polialfabetici rispetto ai monoalfabetici: ogni carattere del plaintext può produrre caratteri cifrati diversi a seconda della posizione.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Test di Kasiski e Indice di Coincidenza}
+
+\noindent\textbf{15)} Nel test di Kasiski si impiega la fattorizzazione delle distanze e la scelta di quelle con un fattore comune. $\to$ \vero{} \freq{3}
+
+\medskip
+\noindent Il \textbf{test di Kasiski} individua sequenze ripetute nel cifrato, calcola le distanze tra le loro occorrenze e fattorizza tali distanze per dedurre la lunghezza della chiave.
+
+\medskip
+\noindent\textbf{48)} L'Indice di Coincidenza è la probabilità che due lettere scelte a caso in un testo siano \textit{diverse}. $\to$ \falso{} \freq{2}
+
+\medskip
+\noindent Trabocchetto: l'Indice di Coincidenza è la probabilità che due lettere scelte a caso in un testo siano \textbf{uguali}.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Diffusione e Confusione}
+
+\noindent\textbf{12)} La proprietà di diffusione misura il grado in cui le proprietà statistiche degli elementi del testo cifrato vengono sparse sugli elementi del testo in chiaro. $\to$ \falso{}
+
+\medskip
+\noindent La direzione è invertita: la \textbf{diffusione} misura come le proprietà statistiche del \textit{testo in chiaro} vengono disperse sugli elementi del \textit{testo cifrato}. Il testo cifrato non può influenzare in retroazione il testo in chiaro.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Cifrari a Blocchi}
+
+\noindent\textbf{78)} Gli algoritmi di cifratura a blocchi sono così definiti perché si arrestano non appena la cifrazione è considerata sicura. $\to$ \falso{}
+
+\medskip
+\noindent I cifrari a blocchi sono così chiamati perché cifrano il testo dividendolo in \textbf{blocchi di dimensione fissa}. Non esiste alcun criterio di ``sicurezza raggiunta'' che li faccia fermare.
+
+\medskip
+\noindent\textbf{20)} CBC sta per Cipher Block Chaining e consiste nel cifrare un blocco modificandolo col contributo del blocco cifrato precedente. $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent In modalità \textbf{CBC}, prima di cifrare ogni blocco di plaintext viene effettuato uno XOR con il blocco cifrato precedente (o con l'IV per il primo blocco), creando una catena di dipendenze.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{RSA e Diffie-Hellman}
+
+\noindent\textbf{16)} Il miglior attacco a RSA è la ricerca dei fattori del modulo. $\to$ \vero{} \freq{3}
+
+\medskip
+\noindent La sicurezza di RSA si basa sulla difficoltà computazionale della \textbf{fattorizzazione} di grandi numeri. Fattorizzare $n = p \cdot q$ permetterebbe di derivare la chiave privata.
+
+\medskip
+\noindent\textbf{53)} Uno dei presupposti per la robustezza degli algoritmi a chiave asimmetrica è che non esistono modi efficienti di fattorizzare il modulo. $\to$ \vero{}
+
+\medskip
+\noindent\textbf{17)} DH e RSA hanno scopi differenti: quello di DH è scambiare una chiave condivisa tra due parti. $\to$ \vero{}
+
+\medskip
+\noindent\textbf{18)} Diffie-Hellman è uno schema di cifratura a chiave simmetrica. $\to$ \falso{}
+
+\medskip
+\noindent DH è un protocollo di \textbf{scambio di chiave} basato su crittografia asimmetrica: permette a due parti di concordare un segreto condiviso su un canale non sicuro, senza cifrare direttamente i messaggi.
+
+\medskip
+\noindent\textbf{19)} DH e RSA hanno scopi differenti: quello di RSA è di essere molto più veloce nella fase di cifratura/decifrazione. $\to$ \falso{} \freq{3}
+
+\medskip
+\noindent\textbf{79)} DH e RSA hanno scopi differenti: quello di RSA è di scambiarsi la chiave simmetrica di cifratura. $\to$ \falso{}
+
+\medskip
+\noindent RSA e DH hanno scopi distinti ma non sono direttamente comparabili: RSA è usato per firma e cifratura asimmetrica, DH per lo scambio di chiavi. RSA è inoltre molto più \textbf{lento} della crittografia simmetrica.
+
+\medskip
+\noindent\textbf{65)} Data chiave pubblica $(e,n)$ e chiave privata $(d,n)$ la cifratura consiste nel calcolare: $c = m^e \bmod n$. $\to$ \vero{}
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Crittografia e Proprietà di Sicurezza}
+
+\noindent\textbf{50)} La crittografia permette di proteggere le quattro proprietà di sicurezza dell'informazione: riservatezza, integrità, autenticità e disponibilità. $\to$ \falso{} \freq{2}
+
+\medskip
+\noindent La crittografia \textbf{non protegge la disponibilità} delle informazioni. La disponibilità (availability) è garantita da meccanismi di ridondanza, backup, ecc.
+
+\medskip
+\noindent\textbf{77)} I cifrari classici possono essere impiegati per proteggere riservatezza e autenticità. $\to$ \falso{}
+
+\medskip
+\noindent I cifrari classici non proteggono l'\textbf{autenticità}: non fanno uso di chiave asimmetrica e non possono fornire una firma digitale verificabile.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{PKI, Certificati e Web of Trust}
+
+\noindent\textbf{51)} Nel modello Infrastrutturale della certificazione delle chiavi pubbliche l'autenticità della chiave pubblica è data da un soggetto terzo fidato che emette la certificazione. $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent Il soggetto terzo fidato è la \textbf{Certification Authority (CA)}. La fiducia nella CA radice è implicita e basata su accordi istituzionali.
+
+\medskip
+\noindent\textbf{52)} Nel modello web of trust della certificazione delle chiavi pubbliche l'autenticità della chiave pubblica è attestata dagli altri utenti. $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent Il modello \textbf{Web of Trust} (tipicamente usato con PGP/GPG) si basa sulla fiducia transitiva tra utenti, senza una CA centralizzata.
+
+\medskip
+\noindent\textbf{58)} X.509 è la versione di SSL più utilizzata. $\to$ \falso{}
+
+\medskip
+\noindent \textbf{X.509} non è una versione di SSL: è uno standard che definisce il formato dei certificati a chiave pubblica ed è alla base dell'infrastruttura PKI.
+
+\medskip
+\noindent\textbf{67)} La fiducia nell'autenticità di una Root Certification Authority è perfettamente verificabile dal corrispondente certificato. $\to$ \falso{}
+
+\medskip
+\noindent Una Root CA \textbf{firma sé stessa}: non è possibile verificarne l'autenticità tramite il certificato. Ci si fida ciecamente delle Root CA preinstallate nel sistema operativo o nel browser.
+
+% -------------------------------------------------------
+\chapter{Sicurezza di Rete e Attacchi}
+% -------------------------------------------------------
+
+\section{Attacchi Passivi e Sniffing}
+
+\noindent\textbf{33)} Lo sniffing può compromettere la riservatezza dei dati. $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent\textbf{34)} Gli attacchi passivi non modificano i dati in transito. $\to$ \vero{} \freq{4}
+
+\medskip
+\noindent Gli attacchi passivi (come lo sniffing) si limitano a \textbf{osservare} il traffico senza alterarlo, violando la \textit{riservatezza} ma non l'integrità.
+
+\medskip
+\noindent\textbf{35)} Lo sniffing NON richiede accesso fisico alla rete. $\to$ \falso{} \freq{2}
+
+\medskip
+\noindent Trabocchetto: per sniffare è necessario essere \textbf{connessi alla rete} su cui viaggiano i pacchetti. Se la comunicazione è wireless, occorre essere nelle vicinanze fisiche dello scambio.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{IP Spoofing e ARP Poisoning}
+
+\noindent\textbf{32)} L'IP spoofing consiste nel cercare di scoprire l'IP di una macchina vittima. $\to$ \falso{}
+
+\medskip
+\noindent\textbf{69)} L'IP spoofing consiste nell'assumere un indirizzo IP diverso da quello regolarmente assegnato al proprio sistema. $\to$ \vero{}
+
+\medskip
+\noindent\textbf{83)} Appropriarsi dell'indirizzo di un host può permettere di attaccarlo di riflesso. $\to$ \vero{}
+
+\medskip
+\noindent\textbf{75)} L'ARP poisoning consiste nel convincere un host che l'IP di una vittima è associato al MAC dell'attaccante. $\to$ \vero{}
+
+\medskip
+\noindent L'ARP poisoning sfrutta la mancanza di autenticazione nel protocollo ARP: inviando risposte ARP fasulle, l'attaccante associa il proprio MAC address all'IP della vittima, redirigendo il traffico verso di sé.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Firewall}
+
+\noindent\textbf{25)} L'approccio default deny su firewall significa che tutto il traffico viene bloccato. $\to$ \falso{} \freq{2}
+
+\medskip
+\noindent Trabocchetto: il \textbf{default deny} significa che se nessuna regola corrisponde al pacchetto, questo viene bloccato per default. Il traffico che corrisponde a una regola permissiva viene invece inoltrato.
+
+\medskip
+\noindent\textbf{80)} Esistono tre tipi fondamentali di firewall: Packet filter, Application-level gateway, Circuit-level gateway. $\to$ \vero{}
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{IDS, IPS e SIEM}
+
+\noindent\textbf{26)} Un Intrusion Detection System può bloccare un attacco in corso. $\to$ \falso{} \freq{2}
+
+\medskip
+\noindent Un \textbf{IDS} rileva e segnala l'attacco ma non interviene. È invece un \textbf{IPS} (Intrusion Prevention System) ad avere la capacità di bloccare attivamente il traffico malevolo.
+
+\medskip
+\noindent\textbf{27)} Un vantaggio degli Host-based IDS è che possono classificare più accuratamente il rischio associato a un pacchetto di rete. $\to$ \vero{} \freq{3}
+
+\medskip
+\noindent Un HIDS opera direttamente sull'host e ha quindi pieno contesto sull'effetto finale di un pacchetto, riducendo i falsi positivi rispetto a un NIDS.
+
+\medskip
+\noindent\textbf{28)} Il tasso di ``falsi positivi'' non è un parametro importante per la qualità di un IDS. $\to$ \falso{} \freq{3}
+
+\medskip
+\noindent Il tasso di falsi positivi è \textbf{fondamentale}: troppi alert su eventi innocui causano \textit{alert fatigue} e portano gli operatori a ignorare il sistema.
+
+\medskip
+\noindent\textbf{29)} Un vantaggio dei Network-based IDS è che non interferiscono col funzionamento dei sistemi monitorati. $\to$ \vero{}
+
+\medskip
+\noindent\textbf{30)} Suricata può funzionare sia da IDS che da IPS. $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent\textbf{55)} I sistemi SIEM raccolgono dati che devono essere nativamente omogenei per poter essere confrontati e aggregati. $\to$ \falso{} \freq{2}
+
+\medskip
+\noindent Il \textbf{SIEM} raccoglie dati eterogenei da fonti multiple (log, eventi, flussi di rete) e li \textit{normalizza} internamente per rilevare correlazioni.
+
+\medskip
+\noindent\textbf{81)} Un EDR può essere definito come una variante evoluta di Network-based IDS. $\to$ \falso{}
+
+\medskip
+\noindent Un \textbf{EDR} (Endpoint Detection and Response) è una variante evoluta di \textbf{HIDS}, non di NIDS: opera a livello di host con integrazione profonda nel kernel.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Botnet e Command \& Control}
+
+\noindent\textbf{60)} Le botnet sono reti di computer infetti chiamati zombie. $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent\textbf{82)} Il Command and Control è il computer incaricato di gestire le comunicazioni con gli elementi di una botnet. $\to$ \vero{}
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{HTTPS e TLS}
+
+\noindent\textbf{31)} HTTPS è HTTP su di un canale di comunicazione cifrato. $\to$ \vero{}
+
+\medskip
+\noindent\textbf{85)} Se un sito è protetto da TLS non è possibile eseguire una SQL Injection. $\to$ \falso{}
+
+\medskip
+\noindent TLS protegge il \textbf{canale di comunicazione} (riservatezza e integrità in transito), ma non ha alcun effetto sulla vulnerabilità applicativa della SQL Injection, che riguarda il lato server.
+
+\medskip
+\noindent\textbf{802.1x:} \hspace{1em}\textbf{59)} 802.1x è uno standard di autenticazione utilizzato nelle connessioni fisiche. $\to$ \vero{}
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{DNS Exfiltration e SQL Injection}
+
+\noindent\textbf{61)} È possibile esfiltrare dati attraverso richieste DNS. $\to$ \vero{}
+
+\medskip
+\noindent La \textbf{DNS exfiltration} sfrutta il fatto che le query DNS sono spesso permesse anche da firewall restrittivi: i dati vengono codificati nei sottodomini delle query.
+
+\medskip
+\noindent\textbf{62)} Nelle time based SQL Injection è importante il tempo di computazione della query SQL. $\to$ \vero{}
+
+\medskip
+\noindent Nelle \textbf{time-based blind SQLi} l'attaccante inferisce informazioni dai tempi di risposta: se la query impiega più tempo (es.\ a causa di un \texttt{SLEEP()}), la condizione iniettata è vera.
+
+\medskip
+\noindent\textbf{71)} Nelle SQL Injection di tipo union select, il numero di colonne da usare per la query è un dato fondamentale per la riuscita dell'attacco. $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent L'operatore \texttt{UNION} richiede che le due SELECT abbiano lo stesso numero e tipo di colonne: determinare questo numero è il primo passo dell'attacco union-based.
+
+% -------------------------------------------------------
+\chapter{Sicurezza del Sistema Operativo e Exploit}
+% -------------------------------------------------------
+
+\section{Secure Boot e Trusted Boot}
+
+\noindent\textbf{21)} Le chiavi di autenticazione usate da Secure Boot sono aggiornabili senza interruzioni di servizio. $\to$ \falso{} \freq{4}
+
+\medskip
+\noindent Per aggiornare le chiavi di Secure Boot, l'immagine del firmware UEFI deve essere firmata con le chiavi private del fornitore e la chiave pubblica va iscritta nel firmware. Questo processo \textbf{richiede un reboot}.
+
+\medskip
+\noindent\textbf{54)} Secure Boot è il nome specifico dato all'implementazione di trusted boot basata su UEFI. $\to$ \vero{}
+
+\medskip
+\noindent\textbf{68)} Measured Boot si riferisce a un processo generale, che tipicamente usa un TPM come hardware root of trust. $\to$ \vero{}
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Attacchi Fisici e USB}
+
+\noindent\textbf{22)} È possibile danneggiare fisicamente un sistema attraverso una porta USB. $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent Attacchi come \textbf{USB Killer} inviano picchi di tensione attraverso la porta USB, causando danni hardware permanenti.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Cifratura dei Dischi}
+
+\noindent\textbf{24)} La cifratura dei dischi protegge da qualsiasi tentativo di esfiltrazione dei dati. $\to$ \falso{} \freq{4}
+
+\medskip
+\noindent La cifratura dei dischi protegge il dato \textit{a riposo}, ma non è un rimedio assoluto: un attaccante con accesso fisico al disco può tentare attacchi di \textbf{brute force} sulla chiave, con tutto il tempo necessario.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Cloud e Disponibilità}
+
+\noindent\textbf{23)} La collocazione di sistemi in cloud migliora (generalmente) la disponibilità dei servizi. $\to$ \vero{} \freq{3}
+
+\medskip
+\noindent\textbf{70)} La collocazione di sistemi in cloud ha unicamente effetti positivi sulla sicurezza. $\to$ \falso{}
+
+\medskip
+\noindent Il cloud introduce rischi specifici come il \textbf{vendor lock-in}, la perdita di controllo diretto sull'infrastruttura, rischi giurisdizionali e l'Economic Denial of Service.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Protezioni Memoria: Canarini e ASLR}
+
+\noindent\textbf{36)} I canarini sono un meccanismo di protezione del kernel Linux per segnalare un overflow in memoria. $\to$ \falso{} \freq{4}
+
+\medskip
+\noindent I \textbf{canarini} (stack canaries) vengono inseriti dal \textbf{compilatore} (es.\ GCC con l'opzione \texttt{-fstack-protector}), non dal kernel. Sono valori sentinella posti tra il buffer e il return address.
+
+\medskip
+\noindent\textbf{37)} ASLR è un meccanismo di protezione del kernel Linux per randomizzare gli spazi di memoria. $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent L'\textbf{ASLR} (Address Space Layout Randomization) è implementato a livello di kernel e randomizza gli indirizzi base di stack, heap e librerie ad ogni esecuzione, rendendo difficile prevedere gli indirizzi target degli exploit.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Buffer Overflow e NOP Sled}
+
+\noindent\textbf{38)} Il comando con codice esadecimale \texttt{0x90} dell'assembler x86 è del tutto inutile ai fini della realizzazione di payload. $\to$ \falso{}
+
+\medskip
+\noindent \texttt{0x90} è l'istruzione \textbf{NOP} (No Operation) di x86. Il \textbf{NOP sled} è una tecnica fondamentale nei buffer overflow: si inserisce una sequenza di NOP prima del shellcode per aumentare la probabilità che l'EIP sovrascrtto punti in una zona valida del payload.
+
+\medskip
+\noindent\textbf{40)} La \texttt{strcpy} in linguaggio C non è una funzione a rischio di generare vulnerabilità di buffer overflow. $\to$ \falso{} \freq{3}
+
+\medskip
+\noindent \texttt{strcpy} è una delle funzioni C più pericolose: non verifica che la stringa sorgente non superi la dimensione del buffer di destinazione. Si consiglia di usare \texttt{strncpy} o funzioni analoghe con controllo della lunghezza.
+
+\medskip
+\noindent\textbf{63)} Il registro EIP in x86 salva il valore dell'indirizzo di ritorno da una funzione. $\to$ \falso{}
+
+\medskip
+\noindent \textbf{EIP} (Extended Instruction Pointer) punta alla \textit{prossima istruzione da eseguire}, non all'indirizzo di ritorno. L'indirizzo di ritorno viene salvato sullo stack al momento della chiamata di funzione.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Brute Force e Protezioni}
+
+\noindent\textbf{39)} Inserire un ritardo di pochi secondi tra due login errate non è una misura efficace per mitigare gli attacchi brute force. $\to$ \falso{}
+
+\medskip
+\noindent Un ritardo di anche soli 2--3 secondi riduce drasticamente la velocità di un attacco brute force automatizzato. Questo meccanismo (\textit{rate limiting}) è ampiamente usato in produzione.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Kernel e System Call}
+
+\noindent\textbf{56)} Il kernel di Linux permette di porre sotto monitoraggio l'invocazione di ogni system call. $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent Questo è reso possibile da \textbf{auditd}, il sottosistema di auditing del kernel Linux che permette di registrare e monitorare le system call invocate dai processi.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{HIDS e Integrità dei File}
+
+\noindent\textbf{57)} Il controllo dell'integrità dei file è uno dei metodi usati dagli HIDS. $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent Strumenti come \textbf{AIDE} o \textbf{Tripwire} calcolano hash dei file critici e rilevano modifiche non autorizzate.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Log e Monitoraggio}
+
+\noindent\textbf{72)} I log sono utili solo a fini forensi (cioè per comprendere un attacco dopo che si è compiuto). $\to$ \falso{}
+
+\medskip
+\noindent I log possono essere analizzati \textbf{in tempo reale} da un HIDS o un SIEM per rilevare attacchi in corso, non solo a posteriori.
+
+\noindent\rule{\textwidth}{0.4pt}
+
+\section{Vulnerabilità Web: File Inclusion e Code Injection}
+
+\noindent\textbf{64)} Con una Local File Inclusion possiamo recuperare file interni al web server. $\to$ \vero{} \freq{2}
+
+\medskip
+\noindent Una \textbf{LFI} sfrutta parametri non sanificati per risalire l'albero delle directory (\texttt{../}) e accedere a file interni come \texttt{/etc/passwd}.
+
+\medskip
+\noindent\textbf{84)} Code Injection si verifica quando dell'input non sanitizzato viene interpretato come codice. $\to$ \vero{}
+
+\medskip
+\noindent Il problema generale dell'\textbf{injection} (SQL, Command, Code) è la mancata separazione tra dati e istruzioni: l'input dell'utente viene interpretato come parte del programma.
+
+\end{document}
