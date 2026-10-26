@@ -28,6 +28,9 @@ DESCRIPTION
     Il limite della bisezione si adatta da solo raddoppiando, quindi funziona
     con buffer di qualunque dimensione.
 
+    Se il binario esiste ma non ha il permesso di esecuzione, lo script glielo
+    assegna da solo con 'chmod +x' prima di iniziare.
+
 OPTIONS
     -s, --stdin
         Inietta il payload tramite Standard Input (pipe) invece che come
@@ -84,6 +87,27 @@ EXACT_OFFSET=-1
 if [[ "$BINARY" != /* && "$BINARY" != ./* ]]; then
 	echo "[!] Attenzione: '$BINARY' e' senza './'. Senza slash la shell lo cerca"
 	echo "    nel PATH e potrebbe non eseguirlo. Consigliato: ./$BINARY"
+fi
+
+# Verifica che il binario esista e sia eseguibile; se non lo e', lo rende tale.
+if [ ! -e "$BINARY" ]; then
+	echo "[-] '$BINARY' non esiste."; exit 1
+fi
+if [ ! -f "$BINARY" ]; then
+	echo "[-] '$BINARY' non e' un file regolare."; exit 1
+fi
+if [ ! -x "$BINARY" ]; then
+	echo "[*] '$BINARY' non ha il permesso di esecuzione: lo imposto con 'chmod +x'..."
+	if chmod +x "$BINARY" 2>/dev/null; then
+		echo "[+] Permesso di esecuzione impostato su '$BINARY'."
+	else
+		echo "[!] chmod senza privilegi fallito: riprovo con sudo..."
+		if sudo chmod +x "$BINARY"; then
+			echo "[+] Permesso di esecuzione impostato (via sudo) su '$BINARY'."
+		else
+			echo "[-] 'chmod +x' su '$BINARY' fallito anche con sudo."; exit 1
+		fi
+	fi
 fi
 
 # Lancia il binario con N byte di 'A'; ritorna 0 se Segmentation Fault (status 139).
