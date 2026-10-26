@@ -1,0 +1,113 @@
+REPORT BINARY EXPLOITATION — SHELLCODE + NOP SLED
+
+Obiettivo: iniettare nello stack uno shellcode (fornito) e deviarvi il flusso
+sovrascrivendo l'indirizzo di ritorno. Poiché l'indirizzo esatto dello stack non
+è noto a priori, davanti allo shellcode si pone una "slitta" di istruzioni NOP
+(\x90): basta far atterrare il salto in un punto qualsiasi della slitta e il flusso
+scivola fino allo shellcode. Se il binario è SUID root, lo shellcode apre una shell
+di root.
+
+Prerequisito dell'esercizio: lo stack è eseguibile (binario compilato con
+-z execstack), altrimenti lo shellcode sullo stack non verrebbe eseguito (NX).
+
+
+1. DISATTIVAZIONE ASLR
+  $ sudo sysctl -w kernel.randomize_va_space=0
+  $ cat /proc/sys/kernel/randomize_va_space
+  0
+
+
+2. DETERMINAZIONE DELL'OFFSET DELL'EIP
+Individuo la soglia di crash (bisezione, SIGSEGV) e poi l'offset ESATTO con cui
+sovrascrivo l'EIP, iniettando 'A' x [OFFSET] + 'BBBB' (0x42424242) in GDB.
+
+  $ ./es $(perl -e "print 'A'x[N]")                 # soglia di crash
+  $ gdb ./es
+  (gdb) run $(perl -e "print 'A'x[OFFSET] . 'BBBB'")
+  (gdb) info registers eip                          # deve valere 0x42424242
+
+Soglia di crash: [NUMERO_CRASH] byte. Offset EIP (da usare): [OFFSET] byte.
+
+
+3. STRUTTURA DEL PAYLOAD
+Lo shellcode fornito dal docente è:
+
+  [SHELLCODE, es. \x31\xc0\xb0\x46...\x2f\x62\x69\x6e\x2f\x73\x68]
+
+Lunghezza shellcode: [SC_LEN] byte. Riempio con NOP tutto lo spazio prima
+dell'indirizzo di ritorno:
+
+  NOP = OFFSET - SC_LEN = [OFFSET] - [SC_LEN] = [NOP] byte
+
+Struttura:  [ NOP x \x90 ] + [ shellcode ] + [ indirizzo di ritorno (4 byte, LE) ]
+
+L'indirizzo di ritorno deve puntare DENTRO la slitta di NOP.
+
+
+4. INDIVIDUAZIONE DELLA NOP SLED NELLO STACK (GDB)
+Lancio in GDB un payload fatto di soli NOP, lungo OFFSET+4 byte, così da riempire
+lo stack (EIP compreso) con 0x90 e poterlo osservare al crash.
+
+  (gdb) run $(perl -e 'print "\x90"x[OFFSET+4]')
+
+Al Segmentation Fault ispeziono lo stack e individuo il blocco contiguo di
+0x90909090 (la slitta). Guardo anche appena prima di $esp per vederne l'inizio.
+
+  (gdb) x/200xw $esp
+  (gdb) x/200xw $esp-400        # per vedere l'inizio della slitta
+
+Esempio di output:
+  0xffffd3a0: 0x90909090 0x90909090 0x90909090 0x90909090
+  0xffffd3b0: 0x90909090 0x90909090 0x90909090 0x90909090
+  ...
+
+Intervallo della slitta: da [0xSLED_START] a [0xSLED_END].
+Mirando al CENTRO (più robusto dei bordi): [0xMID].
+
+
+5. CORREZIONE PER LO SHIFT GDB → ESECUZIONE DIRETTA
+L'indirizzo dello stack differisce di pochi byte tra GDB e l'esecuzione diretta,
+perché GDB inietta variabili d'ambiente proprie che spostano lo stack. Per questo
+non prendo i bordi ma il centro della slitta e, se il primo tentativo non apre la
+shell, provo indirizzi vicini (centro, ±4, ±8, ...) restando dentro la slitta.
+La slitta è ampia, quindi bastano pochissimi tentativi.
+
+Indirizzo di ritorno funzionante: [0xRET]
+Little-Endian:  [\x..\x..\x..\x..]   (es. 0xffffd3a8 → \xa8\xd3\xff\xff)
+
+
+6. ESECUZIONE DELL'EXPLOIT
+IMPORTANTE — Costruisco ed eseguo il payload con 'perl -e exec', NON con la forma
+classica ./es $(perl -e '...'): l'indirizzo dello stack può contenere un byte 0x00
+e, in generale, far passare il payload dalla shell lo altera (eliminazione dei byte
+nulli, split sugli spazi). Con 'exec' è perl stesso a lanciare il binario, quindi
+il payload arriva al programma senza passare dalla shell.
+
+  $ perl -e 'exec "./es", "\x90"x[NOP] . "[SHELLCODE]" . "[LE_RET]"'
+
+Per binari che leggono da standard input (gets/scanf/read), mantengo lo stream
+aperto con 'cat' per poter interagire con la shell ottenuta:
+
+  $ { perl -e 'print "\x90"x[NOP] . "[SHELLCODE]" . "[LE_RET]"'; cat; } | ./es
+
+Verifica dell'avvenuta esecuzione (shell ottenuta):
+
+  $ id
+
+Essendo il binario SUID root, lo shellcode esegue setreuid(0,0) e poi execve di
+/bin/sh, ottenendo una shell di root: 'id' mostra uid=0.
+[INSERIRE SCREENSHOT DEL TERMINALE CON LA SHELL E uid=0]
+
+(Per una shell non-root, da binario non SUID, 'id' mostrerà semplicemente l'uid
+dell'utente corrente.)
+
+
+7. MITIGAZIONE
+La causa radice è l'uso di strcpy()/gets() che copia l'input in un buffer a
+dimensione fissa senza controllo di lunghezza. Si corregge con funzioni a limite
+esplicito (strncpy/snprintf/fgets) e validando l'input. Vanno inoltre riabilitate
+le protezioni disattivate per l'esercizio: stack canary (-fstack-protector), stack
+non eseguibile/NX (rimuovendo -z execstack) e ASLR. Ciascuna, da sola, vanifica
+questo exploit: NX impedisce l'esecuzione dello shellcode sullo stack, ASLR rende
+imprevedibile l'indirizzo della slitta, il canary intercetta la sovrascrittura
+prima del ret.

